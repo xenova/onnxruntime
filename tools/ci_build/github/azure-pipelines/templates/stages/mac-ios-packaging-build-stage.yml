@@ -113,7 +113,11 @@ stages:
         echo "$(find . -iname "*.ipa")"
         echo "==================================================================="
         echo "$(find . -iname "*debug*")"
-        cd $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos
+        echo "==================================================================="
+        cd $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos/ios_package_test.app
+        echo "$(ls)"
+        echo "==================================================================="
+        cd $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos/ios_package_testUITests-Runner.app
         echo "$(ls)"
       displayName: "Find app and tests files"
 
