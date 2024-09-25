@@ -75,7 +75,6 @@ stages:
           --build-dir "$(Build.BinariesDirectory)/apple_framework" \
           --staging-dir "$(Build.BinariesDirectory)/staging" \
           --pod-version "$(ortPodVersion)" \
-          --test \
           --variant ${{ parameters.packageVariant }} \
           --build-settings-file "${{ variables.buildSettingsFile }}" \
           ${{ variables.optionalIncludeOpsByConfigOption }}
