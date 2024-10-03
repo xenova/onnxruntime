@@ -106,7 +106,11 @@
   Microsoft.ML.OnnxRuntime.Tests.MAUI.csproj handles the native lib coming from a local build or a nuget package so we
   don't need to duplicate that logic to include the native lib here.
   -->
-  <ItemGroup Condition="$(SkipNativeLibInclude) != 'true'">
+	<Target Name="DumpValues" BeforeTargets="PreBuildEvent">
+    <Message Importance="High" Text="UsePrebuiltNativePackage: $(UsePrebuiltNativePackage)" />
+  </Target>
+
+  <ItemGroup Condition="$(UsePrebuiltNativePackage) != 'true'">
     <None Condition="'$(IsWindowsBuild)'=='true'"
           Include="$(NativeBuildOutputDir)\onnxruntime.dll;$(NativeBuildOutputDir)\onnxruntime.pdb">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
