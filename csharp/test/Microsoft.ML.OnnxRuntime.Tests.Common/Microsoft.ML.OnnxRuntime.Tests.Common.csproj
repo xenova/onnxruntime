@@ -1,16 +1,38 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+	<!-- ORT specific high level properties -->
+	<PropertyGroup>
+    <!-- potential alternatives
+      <IsLinuxBuild Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))' == 'true'">true</IsLinuxBuild>
+      <IsWindowsBuild Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))' == 'true'">true</IsWindowsBuild>
+      <IsMacOSBuild Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::OSX)))' == 'true'">true</IsMacOSBuild>
+    -->
+		<IsWindowsBuild Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">true</IsWindowsBuild>
+		<IsLinuxBuild Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'linux'">true</IsLinuxBuild>
+		<IsAndroidBuild Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">true</IsAndroidBuild>
+		<IsIOSBuild Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">true</IsIOSBuild>
+		<IsMacOSBuild Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'macos'">true</IsMacOSBuild>
+		<IsMacCatalystBuild Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">true</IsMacCatalystBuild>
+
+		<OnnxRuntimeRoot>$(ProjectDir)..\..\..</OnnxRuntimeRoot>
+	</PropertyGroup>
+
+  <!-- debug output - makes finding/fixing any issues with the the conditions easy.  -->
+  <Target Name="DumpValues" BeforeTargets="PreBuildEvent">
+    <Message Text="TargetPlatform='$(TargetPlatform)' TargetPlatformIdentifier='$(TargetPlatformIdentifier)' " />
+    <Message Text="TargetFramework='$(TargetFramework)' TargetFrameworkIdentifier='$(TargetFrameworkIdentifier)' " />
+    <Message Text="[MSBuild]::GetTargetPlatformIdentifier(TargetFramework)='$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)'))' " />
+    <Message Text="[MSBuild]::GetTargetFrameworkIdentifier(TargetFramework)='$([MSBuild]::GetTargetFrameworkIdentifier('$(TargetFramework)'))' " />
+    <Message Text="IsWindowsBuild='$(IsWindowsBuild)' IsLinuxBuild='$(IsLinuxBuild)' IsMacOSBuild='$(IsMacOSBuild)'" />
+    <Message Text="IsAndroidBuild='$(IsAndroidBuild)' IsIOSBuild='$(IsIOSBuild)' IsMacCatalystBuild='$(IsMacCatalystBuild)'" />
+  </Target>
 
   <PropertyGroup>
     <!-- netstandard2.0 is used by most platforms. net8.0 is required for linux. -->
     <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <IsPackable>false</IsPackable>
-    <OnnxRuntimeCsharpRoot>$(ProjectDir)..\..</OnnxRuntimeCsharpRoot>
     <Platforms>AnyCPU</Platforms>
     <OutputPath>bin\$(Configuration)\</OutputPath>
-    <IsLinuxBuild Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))' == 'true'">true</IsLinuxBuild>
-    <IsWindowsBuild Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))' == 'true'">true</IsWindowsBuild>
-    <IsMacOSBuild Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::OSX)))' == 'true'">true</IsMacOSBuild>
-    <ProtoSrc>$(OnnxRuntimeCsharpRoot)\..\cmake\external\onnx</ProtoSrc>
+    <ProtoSrc>$(OnnxRuntimeRoot)\cmake\external\onnx</ProtoSrc>
 
     <!-- Generated OnnxML.cs triggers this warning. -->
     <NoWarn>8981</NoWarn>
@@ -22,43 +44,154 @@
     <AssemblyOriginatorKeyFile>..\..\OnnxRuntime.snk</AssemblyOriginatorKeyFile>
     <Configurations>Debug;Release;RelWithDebInfo</Configurations>
     <!-- end -->
+
     <RootNamespace>Microsoft.ML.OnnxRuntime.Tests</RootNamespace>
     <AssemblyName>Microsoft.ML.OnnxRuntime.Tests.Common</AssemblyName>
+
+		<!--
+		Allow a pre-built ORT native nuget package (Microsoft.ML.OnnxRuntime.<version>.nupkg) to be used.
+
+		The test project that includes this csproj must be built from the command-line with dotnet. Options:
+      - Microsoft.ML.OnnxRuntime.Tests.NetCoreApp
+      - Microsoft.ML.OnnxRuntime.Tests.MAUI
+
+		If running from the repo root the below is an example command.
+			Note that '==' represents a double '-' which isn't allowed in an XML comment
+			Properties can also be set via environment variables.
+
+		dotnet build csharp\test\Microsoft.ML.OnnxRuntime.Tests.MAUI\Microsoft.ML.OnnxRuntime.Tests.MAUI.csproj
+			==property:UsePrebuiltNativePackage=true
+			==property:CurrentOnnxRuntimeVersion=1.19.2
+			==source <path containing the Microsoft.ML.OnnxRuntime.<version>.nupkg>
+			==source https://api.nuget.org/v3/index.json
+
+		The <version> of the nupkg must match the value provided in CurrentOnnxRuntimeVersion
+		-->
+		<UsePrebuiltNativePackage Condition="'$(UsePrebuiltNativePackage)' == ''">false</UsePrebuiltNativePackage>
+		<CurrentOnnxRuntimeVersion Condition="'$(CurrentOnnxRuntimeVersion)' == ''">1.19.2</CurrentOnnxRuntimeVersion>
+
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(IsLinuxBuild)'=='true'">
-    <!--internal build related properties for Linux -->
-    <OnnxRuntimeBuildDirectory Condition="'$(OnnxRuntimeBuildDirectory)'==''">$(OnnxRuntimeCsharpRoot)\..\build\Linux</OnnxRuntimeBuildDirectory>
-    <NativeBuildOutputDir>$(OnnxRuntimeBuildDirectory)\$(Configuration)</NativeBuildOutputDir>
-    <ProtocDirectory Condition="'$(ProtocDirectory)'==''">$(OnnxRuntimeBuildDirectory)\$(Configuration)\external\protobuf\cmake</ProtocDirectory>
-    <ProtocExe>$(ProtocDirectory)\protoc</ProtocExe>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(IsWindowsBuild)'=='true'">
-    <!--internal build related properties for Windows -->
-    <OnnxRuntimeBuildDirectory Condition="'$(OnnxRuntimeBuildDirectory)'==''">$(OnnxRuntimeCsharpRoot)\..\build\Windows</OnnxRuntimeBuildDirectory>
-    <NativeBuildOutputDir>$(OnnxRuntimeBuildDirectory)\$(Configuration)\$(Configuration)</NativeBuildOutputDir>
-    <ProtocDirectory Condition="'$(ProtocDirectory)'==''">$(OnnxRuntimeBuildDirectory)\$(Configuration)\external\protobuf\cmake\$(Configuration)</ProtocDirectory>
-    <ProtocExe>$(ProtocDirectory)\protoc.exe</ProtocExe>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(IsMacOSBuild)'=='true'">
-    <!--internal build related properties for OSX -->
-    <OnnxRuntimeBuildDirectory Condition="'$(OnnxRuntimeBuildDirectory)'==''">$(OnnxRuntimeCsharpRoot)\..\build\MacOS</OnnxRuntimeBuildDirectory>
-    <NativeBuildOutputDir>$(OnnxRuntimeBuildDirectory)\$(Configuration)</NativeBuildOutputDir>
-    <ProtocDirectory Condition="'$(ProtocDirectory)'==''">$(OnnxRuntimeBuildDirectory)\$(Configuration)\external\protobuf\cmake</ProtocDirectory>
-    <ProtocExe>$(ProtocDirectory)\protoc</ProtocExe>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <Compile Remove="InferenceTest.cs" />
-    <Compile Remove="OrtIoBindingAllocationTest.cs" />
-    <Compile Remove="OrtEnvTests.cs" />
-    <Compile Remove="OrtValueTests.cs" />
-    <Compile Remove="OrtFloat16Tests.cs" />
-    <Compile Remove="Tensors\TensorTests.cs" />
-    <Compile Remove="TrainingTest.cs" />
+  <ItemGroup Condition="'$(UsePrebuiltNativePackage)' == 'true'">
+    <!-- Use the prebuilt package -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="$(CurrentOnnxRuntimeVersion)" />
   </ItemGroup>
+
+  <!-- 'Choose' so we don't need a condition on all the PropertyGroup/ItemGroup elements -->
+  <Choose>
+    <When Condition="'$(UsePrebuiltNativePackage)' != 'true'">
+      <PropertyGroup Condition="'$(IsWindowsBuild)'=='true'">
+        <!--internal build related properties for Windows -->
+        <OnnxRuntimeBuildDirectory Condition="'$(OnnxRuntimeBuildDirectory)'==''">$(OnnxRuntimeRoot)\build\Windows</OnnxRuntimeBuildDirectory>
+        <NativeBuildOutputDir>$(OnnxRuntimeBuildDirectory)\$(Configuration)\$(Configuration)</NativeBuildOutputDir>
+        <ProtocDirectory Condition="'$(ProtocDirectory)'==''">$(OnnxRuntimeBuildDirectory)\$(Configuration)\external\protobuf\cmake\$(Configuration)</ProtocDirectory>
+        <ProtocExe>$(ProtocDirectory)\protoc.exe</ProtocExe>
+      </PropertyGroup>
+
+      <PropertyGroup Condition="'$(IsLinuxBuild)'=='true'">
+        <!--internal build related properties for Linux -->
+        <OnnxRuntimeBuildDirectory Condition="'$(OnnxRuntimeBuildDirectory)'==''">$(OnnxRuntimeRoot)\build\Linux</OnnxRuntimeBuildDirectory>
+        <NativeBuildOutputDir>$(OnnxRuntimeBuildDirectory)\$(Configuration)</NativeBuildOutputDir>
+        <ProtocDirectory Condition="'$(ProtocDirectory)'==''">$(OnnxRuntimeBuildDirectory)\$(Configuration)\external\protobuf\cmake</ProtocDirectory>
+        <ProtocExe>$(ProtocDirectory)\protoc</ProtocExe>
+      </PropertyGroup>
+
+      <PropertyGroup Condition="'$(IsMacOSBuild)'=='true'">
+        <!--internal build related properties for OSX -->
+        <OnnxRuntimeBuildDirectory Condition="'$(OnnxRuntimeBuildDirectory)'==''">$(OnnxRuntimeRoot)\build\MacOS</OnnxRuntimeBuildDirectory>
+        <NativeBuildOutputDir>$(OnnxRuntimeBuildDirectory)\$(Configuration)</NativeBuildOutputDir>
+        <ProtocDirectory Condition="'$(ProtocDirectory)'==''">$(OnnxRuntimeBuildDirectory)\$(Configuration)\external\protobuf\cmake</ProtocDirectory>
+        <ProtocExe>$(ProtocDirectory)\protoc</ProtocExe>
+      </PropertyGroup>
+
+      <PropertyGroup Condition="'$(IsAndroidBuild)' == 'true'">
+        <OnnxRuntimeBuildDirectory Condition="'$(OnnxRuntimeBuildDirectory)'==''">$(OnnxRuntimeRoot)\build\Android</OnnxRuntimeBuildDirectory>
+        <NativeBuildOutputDir>$(OnnxRuntimeBuildDirectory)\$(Configuration)</NativeBuildOutputDir>
+      </PropertyGroup>
+
+      <PropertyGroup Condition="'$(IsIOSBuild)' == 'true'">
+        <OnnxRuntimeBuildDirectory Condition="'$(OnnxRuntimeBuildDirectory)'==''">$(OnnxRuntimeRoot)\build\iOS</OnnxRuntimeBuildDirectory>
+        <Platform Condition=" '$(Platform)' == '' ">iPhoneSimulator</Platform>
+        <PlatformLower>$(Platform.ToLower())</PlatformLower>
+        <NativeBuildOutputDir>$(OnnxRuntimeBuildDirectory)\$(Configuration)\$(Configuration)-$(PlatformLower)</NativeBuildOutputDir>
+      </PropertyGroup>
+
+      <PropertyGroup Condition="'$(IsMacCatalystBuild)' == 'true'">
+        <OnnxRuntimeBuildDirectory Condition="'$(OnnxRuntimeBuildDirectory)'==''">$(OnnxRuntimeRoot)\build\macOS</OnnxRuntimeBuildDirectory>
+        <NativeBuildOutputDir>$(OnnxRuntimeBuildDirectory)\$(Configuration)</NativeBuildOutputDir>
+      </PropertyGroup>
+
+      <ItemGroup Condition="'$(IsWindowsBuild)' == 'true'">
+        <None Condition="Exists('$(NativeBuildOutputDir)\onnxruntime.dll')"
+              Include="$(NativeBuildOutputDir)\*.dll;$(NativeBuildOutputDir)\*.pdb">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+          <Visible>true</Visible>
+        </None>
+      </ItemGroup>
+
+      <ItemGroup Condition="'$(IsLinuxBuild)' == 'true'">
+        <None Condition="Exists('$(NativeBuildOutputDir)\libonnxruntime.so')"
+              Include="$(NativeBuildOutputDir)\libonnxruntime.so">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+          <Visible>false</Visible>
+        </None>
+      </ItemGroup>
+
+      <ItemGroup Condition="'$(IsMacOSBuild)' == 'true'">
+        <None Condition="Exists('$(NativeBuildOutputDir)\libonnxruntime.dylib')"
+              Include="$(NativeBuildOutputDir)\libonnxruntime.dylib">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+          <Visible>false</Visible>
+        </None>
+      </ItemGroup>
+
+      <ItemGroup Condition="'$(IsAndroidBuild)' == 'true'">
+        <AndroidNativeLibrary Condition="Exists('$(NativeBuildOutputDir)\libonnxruntime.so')"
+                              Include="$(NativeBuildOutputDir)\libonnxruntime.so">
+          <Link>libs\libonnxruntime.so</Link>
+        </AndroidNativeLibrary>
+      </ItemGroup>
+
+      <ItemGroup Condition="'$(IsIOSBuild)' == 'true'">
+        <NativeReference Condition="Exists('$(NativeBuildOutputDir)\libonnxruntime.dylib')"
+                         Include="$(NativeBuildOutputDir)\libonnxruntime.dylib">
+          <Link>libs\libonnxruntime.dylib</Link>
+          <Kind>Dynamic</Kind>
+          <ForceLoad>True</ForceLoad>
+          <IsCxx>True</IsCxx>
+        </NativeReference>
+      </ItemGroup>
+
+      <ItemGroup Condition="'$(IsMacCatalystBuild)' == 'true'">
+        <NativeReference Condition="Exists('$(NativeBuildOutputDir)\libonnxruntime.dylib')"
+            Include="$(NativeBuildOutputDir)\libonnxruntime.dylib">
+          <Link>libs\libonnxruntime.dylib</Link>
+          <Kind>Dynamic</Kind>
+          <ForceLoad>True</ForceLoad>
+          <IsCxx>True</IsCxx>
+        </NativeReference>
+      </ItemGroup>
+    </When>
+  </Choose>
+
+	<!-- Property debug output - makes finding/fixing any issues with the conditions easy. -->
+	<PropertyGroup>
+		<!-- local builds-->
+		<HaveOrtDll>false</HaveOrtDll>
+		<HaveOrtDll Condition="Exists('$(NativeBuildOutputDir)\onnxruntime.dll')">true</HaveOrtDll>
+		<HaveOrtSo>false</HaveOrtSo>
+		<HaveOrtSo Condition="Exists('$(NativeBuildOutputDir)\libonnxruntime.so')">true</HaveOrtSo>
+		<HaveOrtDylib>false</HaveOrtDylib>
+		<HaveOrtDylib Condition="Exists('$(NativeBuildOutputDir)\libonnxruntime.dylib')">true</HaveOrtDylib>
+	</PropertyGroup>
+
+	<Target Name="DumpLocalBuild" BeforeTargets="PreBuildEvent">
+		<Message Text="Prebuilt runtime=$(UsePrebuiltNativePackage)" />
+		<Message Text="onnxruntime.dll from local build=$(HaveOrtDll)" />
+		<Message Text="libonnxruntime.so from local build=$(HaveOrtSo)" />
+		<Message Text="libonnxruntime.dylib from local build=$(HaveOrtDylib)" />
+	</Target>
+
   <ItemGroup>
     <Compile Update="Tensors\TensorArithmetic.cs">
       <AutoGen>True</AutoGen>
@@ -102,32 +235,6 @@
     </None>
   </ItemGroup>
 
-  <!--
-  Microsoft.ML.OnnxRuntime.Tests.MAUI.csproj handles the native lib coming from a local build or a nuget package so we
-  don't need to duplicate that logic to include the native lib here.
-  -->
-	<Target Name="DumpValues" BeforeTargets="PreBuildEvent">
-    <Message Importance="High" Text="UsePrebuiltNativePackage: $(UsePrebuiltNativePackage)" />
-  </Target>
-
-  <ItemGroup Condition="$(UsePrebuiltNativePackage) != 'true'">
-    <None Condition="'$(IsWindowsBuild)'=='true'"
-          Include="$(NativeBuildOutputDir)\onnxruntime.dll;$(NativeBuildOutputDir)\onnxruntime.pdb">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Visible>false</Visible>
-    </None>
-
-    <None Condition="'$(IsLinuxBuild)'=='true'" Include="$(NativeBuildOutputDir)\libonnxruntime.so">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Visible>false</Visible>
-    </None>
-
-    <None Condition="'$(IsMacOSBuild)'=='true'" Include="$(NativeBuildOutputDir)\libonnxruntime.dylib">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Visible>false</Visible>
-    </None>
-  </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.0" />
     <PackageReference Include="Google.Protobuf" Version="3.21.12" />
@@ -136,16 +243,20 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="$(OnnxRuntimeCsharpRoot)\src\Microsoft.ML.OnnxRuntime\Microsoft.ML.OnnxRuntime.csproj" />
+    <ProjectReference Include="$(OnnxRuntimeRoot)\csharp\src\Microsoft.ML.OnnxRuntime\Microsoft.ML.OnnxRuntime.csproj" />
   </ItemGroup>
 
   <!-- generate OnnxMl.cs from ONNX protobuf definition -->
   <Target Name="ProtoGen" BeforeTargets="BeforeBuild" Condition="Exists('$(ProtocExe)')">
-    <Exec Command="$(ProtocExe) -I=$(ProtoSrc) --csharp_out=. $(ProtoSrc)\onnx\onnx-ml.proto3" ContinueOnError="false"></Exec>
+    <Exec Command="$(ProtocExe) -I=$(ProtoSrc) --csharp_out=. $(ProtoSrc)\onnx\onnx-ml.proto3"
+          ContinueOnError="false">
+    </Exec>
   </Target>
 
   <Target Name="ProtoDataGen" BeforeTargets="BeforeBuild" Condition="Exists('$(ProtocExe)')">
-    <Exec Command="$(ProtocExe) -I=$(ProtoSrc) --csharp_out=. $(ProtoSrc)\onnx\onnx-data.proto3" ContinueOnError="false"></Exec>
+    <Exec Command="$(ProtocExe) -I=$(ProtoSrc) --csharp_out=. $(ProtoSrc)\onnx\onnx-data.proto3"
+          ContinueOnError="false">
+    </Exec>
   </Target>
 
   <ItemGroup>
@@ -156,20 +267,49 @@
     <WriteLinesToFile File="$(OutputPath)\Properties.txt" Lines="@(BuildEnvVars)" Overwrite="true" />
   </Target>
 
-  <ItemGroup>
+  <!-- Test Data -->
+    <!-- MAUI mobile apps need the test data to be embedded resources -->
+  <ItemGroup Condition="'$(IsAndroidBuild)' == 'true' OR '$(IsIOSBuild)' == 'true' OR '$(IsMacCatalystBuild)' == 'true'">
     <EmbeddedResource Include="..\..\testdata\*">
         <Link>TestData\%(Filename)%(Extension)</Link>
     </EmbeddedResource>
-    <EmbeddedResource Include="$(OnnxRuntimeCSharpRoot)\..\onnxruntime\test\testdata\overridable_initializer.onnx">
+    <EmbeddedResource Include="$(OnnxRuntimeRoot)\onnxruntime\test\testdata\overridable_initializer.onnx">
         <Link>TestData\overridable_initializer.onnx</Link>
     </EmbeddedResource>
-    <EmbeddedResource Include="$(OnnxRuntimeCSharpRoot)\..\onnxruntime\test\testdata\capi_symbolic_dims.onnx">
+    <EmbeddedResource Include="$(OnnxRuntimeRoot)\onnxruntime\test\testdata\capi_symbolic_dims.onnx">
         <Link>TestData\capi_symbolic_dims.onnx</Link>
     </EmbeddedResource>
   </ItemGroup>
 
+  <Choose>
+    <!-- all non-MAUI mobile builds we copy directly -->
+    <When Condition="'$(IsAndroidBuild)' != 'true' AND '$(IsIOSBuild)' != 'true' AND '$(IsMacCatalystBuild)' != 'true'">
+      <ItemGroup>
+        <None Include="$(OnnxRuntimeRoot)\onnxruntime\test\testdata\*">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+          <Visible>false</Visible>
+        </None>
+
+        <None Include="$(OnnxRuntimeRoot)\onnxruntime\test\testdata\overridable_initializer.onnx">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+          <Visible>false</Visible>
+        </None>
+
+        <None Include="$(OnnxRuntimeRoot)\onnxruntime\test\testdata\capi_symbolic_dims.onnx">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+          <Visible>false</Visible>
+        </None>
+
+        <None Include="$(OnnxRuntimeRoot)\onnxruntime\test\testdata\custom_op_library\custom_op_test.onnx">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+          <Visible>false</Visible>
+        </None>
+      </ItemGroup>
+    </When>
+
+  </Choose>
+
   <ItemGroup>
     <Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />
   </ItemGroup>
-
 </Project>

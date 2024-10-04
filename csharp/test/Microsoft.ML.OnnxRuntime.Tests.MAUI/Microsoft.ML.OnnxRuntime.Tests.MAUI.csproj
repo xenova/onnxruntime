@@ -6,27 +6,6 @@
 		<IsIOSBuild Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">true</IsIOSBuild>
 		<IsMacCatalystBuild Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">true</IsMacCatalystBuild>
 		<OnnxRuntimeRoot>$(ProjectDir)..\..\..</OnnxRuntimeRoot>
-
-		<!--
-		Allow a pre-built ORT native nuget package (Microsoft.ML.OnnxRuntime.<version>.nupkg) to be used.
-		  e.g. End2End test for nuget package from CI
-
-		The project must be built from the command-line with dotnet.
-		If running from the repo root the below is an example command.
-			Note that '==' represents a double '-' which isn't allowed in an XML comment
-			Properties can also be set via environment variables.
-
-		dotnet build csharp\test\Microsoft.ML.OnnxRuntime.Tests.MAUI\Microsoft.ML.OnnxRuntime.Tests.MAUI.csproj
-			==property:UsePrebuiltNativePackage=true
-			==property:CurrentOnnxRuntimeVersion=1.19.2
-			==source <path containing the Microsoft.ML.OnnxRuntime.<version>.nupkg>
-			==source https://api.nuget.org/v3/index.json
-
-		The <version> of the nupkg must match the value provided in CurrentOnnxRuntimeVersion
-		-->
-		<UsePrebuiltNativePackage Condition="'$(UsePrebuiltNativePackage)' == ''">true</UsePrebuiltNativePackage>
-		<CurrentOnnxRuntimeVersion Condition="'$(CurrentOnnxRuntimeVersion)' == ''">1.19.2</CurrentOnnxRuntimeVersion>
-
 	</PropertyGroup>
 
 	<!-- General app properties -->
@@ -75,116 +54,10 @@
 		<SignAssembly>true</SignAssembly>
 		<AssemblyOriginatorKeyFile>..\..\OnnxRuntime.snk</AssemblyOriginatorKeyFile>
 
-		<!-- Multiple csproj files copy the ORT dll and pdb files. -->
+		<!-- Multiple csproj files copy the ORT dll and pdb files.
 		<ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
+		-->
 	</PropertyGroup>
-
-	<PropertyGroup Condition="'$(IsWindowsBuild)' == 'true'">
-		<OnnxRuntimeBuildDirectory Condition="'$(OnnxRuntimeBuildDirectory)'==''">$(OnnxRuntimeRoot)\build\Windows</OnnxRuntimeBuildDirectory>
-	</PropertyGroup>
-	<PropertyGroup Condition="'$(IsAndroidBuild)' == 'true'">
-		<OnnxRuntimeBuildDirectory Condition="'$(OnnxRuntimeBuildDirectory)'==''">$(OnnxRuntimeRoot)\build\Android</OnnxRuntimeBuildDirectory>
-	</PropertyGroup>
-	<PropertyGroup Condition="'$(IsIOSBuild)' == 'true'">
-		<OnnxRuntimeBuildDirectory Condition="'$(OnnxRuntimeBuildDirectory)'==''">$(OnnxRuntimeRoot)\build\iOS</OnnxRuntimeBuildDirectory>
-		<Platform Condition=" '$(Platform)' == '' ">iPhoneSimulator</Platform>
-		<PlatformLower>$(Platform.ToLower())</PlatformLower>
-	</PropertyGroup>
-	<PropertyGroup Condition="'$(IsMacCatalystBuild)' == 'true'">
-		<OnnxRuntimeBuildDirectory Condition="'$(OnnxRuntimeBuildDirectory)'==''">$(OnnxRuntimeRoot)\build\macOS</OnnxRuntimeBuildDirectory>
-	</PropertyGroup>
-
-	<ItemGroup Condition="'$(UsePrebuiltNativePackage)' == 'true'">
-		<!-- Use the prebuilt package -->
-		<PackageReference Include="Microsoft.ML.OnnxRuntime" Version="$(CurrentOnnxRuntimeVersion)" />
-	</ItemGroup>
-
-	<ItemGroup Condition="'$(UsePrebuiltNativePackage)' != 'true' and '$(IsWindowsBuild)' == 'true'">
-		<!-- local build -->
-		<None Condition="Exists('$(NativeBuildOutputDir)\onnxruntime.dll')"
-			Include="$(NativeBuildOutputDir)\*.dll;$(NativeBuildOutputDir)\*.pdb">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-			<Visible>true</Visible>
-		</None>
-
-		<!-- test data -->
-		<None Include="$(OnnxRuntimeRoot)\onnxruntime\test\testdata\*">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-			<Visible>false</Visible>
-			</None>
-			<None Include="$(OnnxRuntimeRoot)\onnxruntime\test\testdata\overridable_initializer.onnx">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-			<Visible>false</Visible>
-		</None>
-		<None Include="$(OnnxRuntimeRoot)\onnxruntime\test\testdata\capi_symbolic_dims.onnx">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-			<Visible>false</Visible>
-		</None>
-		<None Include="$(OnnxRuntimeRoot)\onnxruntime\test\testdata\custom_op_library\custom_op_test.onnx">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-			<Visible>false</Visible>
-		</None>
-	</ItemGroup>
-
-	<ItemGroup Condition="'$(UsePrebuiltNativePackage)' != 'true' and '$(IsAndroidBuild)' == 'true'">
-		<!-- local build -->
-		<AndroidNativeLibrary Condition="Exists('$(NativeBuildOutputDir)\libonnxruntime.so')"
-							  Include="$(NativeBuildOutputDir)\libonnxruntime.so">
-			<Link>libs\libonnxruntime.so</Link>
-		</AndroidNativeLibrary>
-	</ItemGroup>
-
-	<ItemGroup Condition="'$(UsePrebuiltNativePackage)' != 'true' and '$(IsIOSBuild)' == 'true'">
-		<!-- local build of shared lib -->
-		<NativeReference
-			Condition="Exists('$(NativeBuildOutputDir)\libonnxruntime.dylib')"
-			Include="$(NativeBuildOutputDir)\libonnxruntime.dylib">
-			<Link>libs\libonnxruntime.dylib</Link>
-			<Kind>Dynamic</Kind>
-			<ForceLoad>True</ForceLoad>
-			<IsCxx>True</IsCxx>
-		</NativeReference>
-	</ItemGroup>
-
-	<ItemGroup Condition="'$(UsePrebuiltNativePackage)' != 'true' and '$(IsMacCatalystBuild)' == 'true'">
-		<!-- local build -->
-		<NativeReference Condition="Exists('$(NativeBuildOutputDir)\libonnxruntime.dylib')"
-				 Include="$(NativeBuildOutputDir)\libonnxruntime.dylib">
-			<Link>libs\libonnxruntime.dylib</Link>
-			<Kind>Dynamic</Kind>
-			<ForceLoad>True</ForceLoad>
-			<IsCxx>True</IsCxx>
-		</NativeReference>
-	</ItemGroup>
-
-	<!-- Property debug output - makes finding/fixing any issues with the conditions easy. -->
-	<PropertyGroup>
-		<!-- local builds-->
-		<HaveOrtDll>false</HaveOrtDll>
-		<HaveOrtDll Condition="Exists('$(NativeBuildOutputDir)\onnxruntime.dll')">true</HaveOrtDll>
-		<HaveOrtSo>false</HaveOrtSo>
-		<HaveOrtSo Condition="Exists('$(NativeBuildOutputDir)\libonnxruntime.so')">true</HaveOrtSo>
-		<HaveOrtDylib>false</HaveOrtDylib>
-		<HaveOrtDylib Condition="Exists('$(NativeBuildOutputDir)\libonnxruntime.dylib')">true</HaveOrtDylib>
-		<!-- prebuilt -->
-		<HavePrebuilt>false</HavePrebuilt>
-		<HavePrebuilt Condition="Exists('$(UsePrebuiltNativePackage)')">true</HavePrebuilt>
-	</PropertyGroup>
-
-	<Target Name="DumpValues" BeforeTargets="PreBuildEvent">
-		<Message Text="TargetFramework=$(TargetFramework)" />
-		<Message Text="Platform=$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)'))" />
-		<Message Text="OnnxRuntimeRoot=$(OnnxRuntimeRoot)" />
-		<Message Text="NativeBuildOutputDir=$(NativeBuildOutputDir)" />
-		<Message Text="IsWindowsBuild='$(IsWindowsBuild)'" />
-		<Message Text="IsAndroidBuild='$(IsAndroidBuild)'" />
-		<Message Text="IsIOSBuild='$(IsIOSBuild)'" />
-		<Message Text="IsMacCatalystBuild='$(IsMacCatalystBuild)'" />
-		<Message Text="Prebuilt runtime=$(UsePrebuiltNativePackage)" />
-		<Message Text="onnxruntime.dll from local build=$(HaveOrtDll)" />
-		<Message Text="libonnxruntime.so from local build=$(HaveOrtSo)" />
-		<Message Text="libonnxruntime.dylib from local build=$(HaveOrtDylib)" />
-	</Target>
 
 	<ItemGroup>
 		<!-- App Icon -->
@@ -204,7 +77,7 @@
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
 	</ItemGroup>
 
-	<ItemGroup>
+	<!-- <ItemGroup>
 		<Compile Include="..\Microsoft.ML.OnnxRuntime.Tests.Common\InferenceTest.cs">
 			<Link>InferenceTest.cs</Link>
 		</Compile>
@@ -214,7 +87,7 @@
 		<Compile Include="..\Microsoft.ML.OnnxRuntime.Tests.Common\Tensors\TensorTests.cs">
 			<Link>TensorTests.cs</Link>
 		</Compile>
-	</ItemGroup>
+	</ItemGroup> -->
 
 	<ItemGroup>
 		<ProjectReference
@@ -248,7 +121,9 @@
 
 	<Target Name="RemoveVisualStudioTestRunner" BeforeTargets="_ComputeAppxPackagePayload">
 		<ItemGroup>
-			<_VisualStudioTestRunnerFiles Include="@(PackagingOutputs)" Condition="$([System.String]::Copy('%(PackagingOutputs.FullPath)').Contains('xunit.runner.visualstudio'))" />
+			<_VisualStudioTestRunnerFiles
+				Include="@(PackagingOutputs)"
+				Condition="$([System.String]::Copy('%(PackagingOutputs.FullPath)').Contains('xunit.runner.visualstudio'))" />
 			<PackagingOutputs Remove="@(_VisualStudioTestRunnerFiles)" />
 		</ItemGroup>
 	</Target>
