@@ -53,10 +53,6 @@
 
 		<SignAssembly>true</SignAssembly>
 		<AssemblyOriginatorKeyFile>..\..\OnnxRuntime.snk</AssemblyOriginatorKeyFile>
-
-		<!-- Multiple csproj files copy the ORT dll and pdb files.
-		<ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
-		-->
 	</PropertyGroup>
 
 	<ItemGroup>
