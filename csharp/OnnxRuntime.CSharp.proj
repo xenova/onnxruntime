@@ -143,12 +143,11 @@ CMake creates a target to this project
         <Output TaskParameter="ConsoleOutput" PropertyName="GenerateNuspecOutput" />
     </Exec>
 
-    <!-- Create Microsoft.ML.OnnxRuntime.Managed with the C# bindings using the C# project
+    <!-- Create Microsoft.ML.OnnxRuntime.Managed with the C# bindings using the C# project -->
     <Message Condition="'$(IsPlatformSpecificSubPackage)'!='True'" Importance="High" Text="Creating Microsoft.ML.OnnxRuntime.Managed nuget package..." />
     <MSBuild Condition="'$(IsPlatformSpecificSubPackage)'!='True'" Projects="src\Microsoft.ML.OnnxRuntime\Microsoft.ML.OnnxRuntime.csproj"
              Targets="CopyMiscFiles;Pack"
              Properties="NoBuild=true;Platform=AnyCPU;PackageVersion=$(PackageVersion);OrtPackageId=$(OrtPackageId);IncludeMobileTargets=$(IncludeMobileTargets)"/>
-    -->
 
     <MSBuild Projects ="$(MSBuildProjectFullPath)"
              Targets ="CreateNativePackage" />

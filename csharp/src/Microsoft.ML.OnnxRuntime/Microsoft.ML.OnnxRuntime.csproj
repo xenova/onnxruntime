@@ -31,8 +31,7 @@
     <TargetFrameworks>$(BaseTargets);$(MobileTargets)</TargetFrameworks>
   </PropertyGroup>
 
-	<!-- ORT specific high level properties -->
-	<PropertyGroup>
+  <PropertyGroup>
     <!-- Build host  -->
     <IsLinuxBuild Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))' == 'true'">true</IsLinuxBuild>
     <IsWindowsBuild Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))' == 'true'">true</IsWindowsBuild>
@@ -43,20 +42,20 @@
          Note there are slight differences in casing (e.g. macos vs macOS), so if we ever
          change to use $(TargetPlatformIdentifier) we need to adjust for that.
     -->
-		<IsWindowsMAUIBuild Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">true</IsWindowsMAUIBuild>
-		<IsAndroidBuild Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">true</IsAndroidBuild>
-		<IsIOSBuild Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">true</IsIOSBuild>
-		<IsMacCatalystBuild Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">true</IsMacCatalystBuild>
+    <IsWindowsTarget Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">true</IsWindowsTarget>
+    <IsAndroidTarget Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">true</IsAndroidTarget>
+    <IsIOSTarget Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">true</IsIOSTarget>
+    <IsMacCatalystTarget Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">true</IsMacCatalystTarget>
 
-		<OnnxRuntimeRoot>$(ProjectDir)..\..\..</OnnxRuntimeRoot>
+    <OnnxRuntimeRoot>$(ProjectDir)..\..\..</OnnxRuntimeRoot>
 
     <!-- Controls whether C# Bindings for Training are included in the Managed Nuget Package.
     Bindings for training are included by default. If user tries to call training apis when the native package installed
     on their device is not built for training, an exception will be thrown with the following message -
     "Training is disabled in the current build. Please build onnxruntime from source with the build flags
     enable_training_apis. "-->
-    <EnableTrainingApis Condition="'$(EnableTrainingApis)' == ''">false</EnableTrainingApis>
-	</PropertyGroup>
+    <EnableTrainingApis Condition="'$(EnableTrainingApis)' == ''">true</EnableTrainingApis>
+  </PropertyGroup>
 
   <!-- package info -->
   <PropertyGroup>
@@ -113,8 +112,6 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <DebugType>portable</DebugType>
 
-    <!-- <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute> -->
-
     <Configurations>Debug;Release;RelWithDebInfo</Configurations>
   </PropertyGroup>
 
@@ -128,20 +125,20 @@
   <!--
     Properties that depend on the target framework.
   -->
-  <PropertyGroup Condition="'$(IsIOSBuild)'=='true' OR '$(IsMacCatalystBuild)'=='true' OR '$(IsAndroidBuild)'=='true'">
+  <PropertyGroup Condition="'$(IsIOSTarget)'=='true' OR '$(IsMacCatalystTarget)'=='true' OR '$(IsAndroidTarget)'=='true'">
     <OrtConstants>$(OrtConstants);__MOBILE__</OrtConstants>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(IsAndroidBuild)'=='true'">
+  <PropertyGroup Condition="'$(IsAndroidTarget)'=='true'">
     <OrtConstants>$(OrtConstants);__ANDROID__</OrtConstants>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(IsIOSBuild)'=='true' OR '$(IsMacCatalystBuild)'=='true'">
+  <PropertyGroup Condition="'$(IsIOSTarget)'=='true' OR '$(IsMacCatalystTarget)'=='true'">
     <OrtConstants>$(OrtConstants);__IOS__</OrtConstants>
   </PropertyGroup>
 
-  <!-- CoreML is valid on iOS, mac-catalyst and macOS -->
-  <PropertyGroup Condition="'$(IsIOSBuild)'=='true' OR '$(IsMacCatalystBuild)'=='true' OR '$(IsMacOSBuild)'=='true'">
+  <!-- CoreML is valid on iOS, Mac Catalyst and macOS -->
+  <PropertyGroup Condition="'$(IsIOSTarget)'=='true' OR '$(IsMacCatalystTarget)'=='true' OR '$(IsMacOSBuild)'=='true'">
     <OrtConstants>$(OrtConstants);__ENABLE_COREML__</OrtConstants>
   </PropertyGroup>
 
@@ -167,10 +164,23 @@
     <Message Text="[MSBuild]::GetTargetPlatformIdentifier(TargetFramework)='$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)'))' " />
     <Message Text="[MSBuild]::GetTargetFrameworkIdentifier(TargetFramework)='$([MSBuild]::GetTargetFrameworkIdentifier('$(TargetFramework)'))' " />
     <Message Text="IsWindowsBuild='$(IsWindowsBuild)' IsLinuxBuild='$(IsLinuxBuild)' IsMacOSBuild='$(IsMacOSBuild)'" />
-    <Message Text="IsWindowsMAUIBuild='$(IsWindowsMAUIBuild)' IsAndroidBuild='$(IsAndroidBuild)' IsIOSBuild='$(IsIOSBuild)' IsMacCatalystBuild='$(IsMacCatalystBuild)'" />
+    <Message Text="IsWindowsTarget='$(IsWindowsTarget)' IsAndroidTarget='$(IsAndroidTarget)' IsIOSTarget='$(IsIOSTarget)' IsMacCatalystTarget='$(IsMacCatalystTarget)'" />
     <Message Text="OrtConstants='$(OrtConstants)' " />
     <Message Text="TargetFrameworks='$(TargetFrameworks)' " />
   </Target>
+
+  <ItemGroup>
+    <None Include="$(OnnxRuntimeRoot)\LICENSE.txt;$(OnnxRuntimeRoot)\ThirdPartyNotices.txt;$(OnnxRuntimeRoot)\ORT_icon_for_light_bg.png;$(OnnxRuntimeRoot)\docs\Privacy.md"
+          PackagePath="\"
+          Pack="true"
+          Visible="false"
+    />
+    <None Include="targets\netstandard\$(PackageId).targets"
+          PackagePath="build\netstandard2.0\$(PackageId).targets"
+          Pack="true"
+          Visible="false"
+    />
+  </ItemGroup>
 
   <!--
     We used to have platform specific files named *.<platform>.cs (e.g. 1.11 release) but don't anymore,
@@ -184,4 +194,22 @@
     <PackageReference Include="System.Memory" Version="4.5.5" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
+
+  <ItemGroup>
+    <LicenseFile Include="$(OnnxRuntimeRoot)\LICENSE" Visible="false" />
+    <TargetsFile Include="$(OnnxRuntimeRoot)\csharp\src\Microsoft.ML.OnnxRuntime\targets\netstandard\targets.xml" Visible="false" />
+  </ItemGroup>
+
+  <Target Name="CopyMiscFiles" BeforeTargets="PreBuildEvent">
+    <Copy SourceFiles="@(LicenseFile)" DestinationFiles="@(LicenseFile->'$(OnnxRuntimeRoot)\%(Filename).txt')" />
+    <Copy SourceFiles="@(TargetsFile)" DestinationFiles="@(TargetsFile->'$(OnnxRuntimeRoot)\csharp\src\Microsoft.ML.OnnxRuntime\targets\netstandard\$(PackageId).targets')" />
+  </Target>
+
+  <Target Name="CopyPackage" AfterTargets="Pack">
+    <Copy
+      SourceFiles="$(OutputPath)\$(PackageId).$(PackageVersion).nupkg"
+      DestinationFolder="$(NativeBuildOutputDir)"
+    />
+  </Target>
+
 </Project>
