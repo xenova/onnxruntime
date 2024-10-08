@@ -87,7 +87,7 @@
     <ItemGroup>
         <ProjectReference
             Include="..\..\src\Microsoft.ML.OnnxRuntime\Microsoft.ML.OnnxRuntime.csproj"
-            name="Microsoft.ML.OnnxRuntime.Managed" />
+            name="Microsoft.ML.OnnxRuntime" />
         <ProjectReference
             Include="..\Microsoft.ML.OnnxRuntime.Tests.Common\Microsoft.ML.OnnxRuntime.Tests.Common.csproj"
             name="Microsoft.ML.OnnxRuntime.Tests.Common" />
