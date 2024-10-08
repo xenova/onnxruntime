@@ -46,6 +46,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="InferenceTest.cs" />
+    <Compile Remove="OrtIoBindingAllocationTest.cs" />
+    <Compile Remove="OrtEnvTests.cs" />
+    <Compile Remove="OrtValueTests.cs" />
+    <Compile Remove="OrtFloat16Tests.cs" />
+    <Compile Remove="Tensors\TensorTests.cs" />
+    <Compile Remove="TrainingTest.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Update="Tensors\TensorArithmetic.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>

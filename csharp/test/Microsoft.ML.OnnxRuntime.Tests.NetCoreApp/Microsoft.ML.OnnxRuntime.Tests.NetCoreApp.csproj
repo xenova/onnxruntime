@@ -89,6 +89,11 @@
       <Visible>false</Visible>
     </None>
 
+    <None Include="$(OnnxRuntimeRoot)\csharp\testdata\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </None>
+
     <None Include="$(OnnxRuntimeRoot)\onnxruntime\test\testdata\custom_op_library\custom_op_test.onnx">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Visible>false</Visible>

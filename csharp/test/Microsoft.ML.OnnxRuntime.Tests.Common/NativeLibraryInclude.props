@@ -2,7 +2,7 @@
 Add the native libraries from either a local build or a prebuilt native nuget package.
 
 This has to be imported by the test project with the actual target platform/frameworks to work correctly as the common
-test project only targets .net8 and .netstandard2.0.
+test project only targets net8 and netstandard2.0.
 -->
 <Project>
     <PropertyGroup>
