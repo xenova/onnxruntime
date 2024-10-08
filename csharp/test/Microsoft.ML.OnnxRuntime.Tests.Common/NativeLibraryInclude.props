@@ -20,9 +20,10 @@ test project only targets .net8 and .netstandard2.0.
 	<!--
 	Allow a pre-built ORT native nuget package (Microsoft.ML.OnnxRuntime.<version>.nupkg) to be used.
 
-	The test project that includes this csproj must be built from the command-line with dotnet. Options:
-	- Microsoft.ML.OnnxRuntime.Tests.NetCoreApp
-	- Microsoft.ML.OnnxRuntime.Tests.MAUI
+	The test projects that include this file must be built from the command-line to enable using a prebuilt package.
+	Current test projects:
+		- Microsoft.ML.OnnxRuntime.Tests.NetCoreApp
+		- Microsoft.ML.OnnxRuntime.Tests.MAUI
 
 	If running from the repo root the below is an example command.
 		Note that '==' represents a double '-' which isn't allowed in an XML comment
@@ -37,8 +38,11 @@ test project only targets .net8 and .netstandard2.0.
 	The <version> of the nupkg must match the value provided in CurrentOnnxRuntimeVersion.
 
 	The "==source" args are not required if a released Microsoft.ML.OnnxRuntime package is being used.
+	If using a previous release	you must ensure it is compatible with the entries in NativeMethods.shared.cs.
+	If new bindings have been added recently you will get error when those are initialized if the native code is out
+	of date and does not match.
 	-->
-	<UsePrebuiltNativePackage Condition="'$(UsePrebuiltNativePackage)' == ''">false</UsePrebuiltNativePackage>
+	<UsePrebuiltNativePackage Condition="'$(UsePrebuiltNativePackage)' == ''">true</UsePrebuiltNativePackage>
 	<CurrentOnnxRuntimeVersion Condition="'$(CurrentOnnxRuntimeVersion)' == ''">1.20.0-dev-20241007</CurrentOnnxRuntimeVersion>
 </PropertyGroup>
 
