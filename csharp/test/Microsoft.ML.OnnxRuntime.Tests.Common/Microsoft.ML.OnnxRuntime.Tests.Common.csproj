@@ -67,7 +67,7 @@
 
 		The <version> of the nupkg must match the value provided in CurrentOnnxRuntimeVersion
 		-->
-		<UsePrebuiltNativePackage Condition="'$(UsePrebuiltNativePackage)' == ''">false</UsePrebuiltNativePackage>
+		<UsePrebuiltNativePackage Condition="'$(UsePrebuiltNativePackage)' == ''">true</UsePrebuiltNativePackage>
 		<CurrentOnnxRuntimeVersion Condition="'$(CurrentOnnxRuntimeVersion)' == ''">1.19.2</CurrentOnnxRuntimeVersion>
 
   </PropertyGroup>
@@ -267,9 +267,8 @@
     <WriteLinesToFile File="$(OutputPath)\Properties.txt" Lines="@(BuildEnvVars)" Overwrite="true" />
   </Target>
 
-  <!-- Test Data -->
-    <!-- MAUI mobile apps need the test data to be embedded resources -->
-  <ItemGroup Condition="'$(IsAndroidBuild)' == 'true' OR '$(IsIOSBuild)' == 'true' OR '$(IsMacCatalystBuild)' == 'true'">
+  <!-- Test Data that is used in MAUI and NetCore test app. Loaded via embedded resource for that to be possible -->
+  <ItemGroup>
     <EmbeddedResource Include="..\..\testdata\*">
         <Link>TestData\%(Filename)%(Extension)</Link>
     </EmbeddedResource>
@@ -280,34 +279,6 @@
         <Link>TestData\capi_symbolic_dims.onnx</Link>
     </EmbeddedResource>
   </ItemGroup>
-
-  <Choose>
-    <!-- all non-MAUI mobile builds we copy directly -->
-    <When Condition="'$(IsAndroidBuild)' != 'true' AND '$(IsIOSBuild)' != 'true' AND '$(IsMacCatalystBuild)' != 'true'">
-      <ItemGroup>
-        <None Include="$(OnnxRuntimeRoot)\onnxruntime\test\testdata\*">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-          <Visible>false</Visible>
-        </None>
-
-        <None Include="$(OnnxRuntimeRoot)\onnxruntime\test\testdata\overridable_initializer.onnx">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-          <Visible>false</Visible>
-        </None>
-
-        <None Include="$(OnnxRuntimeRoot)\onnxruntime\test\testdata\capi_symbolic_dims.onnx">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-          <Visible>false</Visible>
-        </None>
-
-        <None Include="$(OnnxRuntimeRoot)\onnxruntime\test\testdata\custom_op_library\custom_op_test.onnx">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-          <Visible>false</Visible>
-        </None>
-      </ItemGroup>
-    </When>
-
-  </Choose>
 
   <ItemGroup>
     <Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />

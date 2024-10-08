@@ -77,7 +77,9 @@
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
 	</ItemGroup>
 
-	<!-- <ItemGroup>
+	<!-- NOTE: The xUnit framework doesn't pickup the tests defined within the referenced
+	Microsoft.ML.OnnxRuntime.Tests.Common project -->
+	<ItemGroup>
 		<Compile Include="..\Microsoft.ML.OnnxRuntime.Tests.Common\InferenceTest.cs">
 			<Link>InferenceTest.cs</Link>
 		</Compile>
@@ -87,12 +89,12 @@
 		<Compile Include="..\Microsoft.ML.OnnxRuntime.Tests.Common\Tensors\TensorTests.cs">
 			<Link>TensorTests.cs</Link>
 		</Compile>
-	</ItemGroup> -->
+	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference
 			Include="..\..\src\Microsoft.ML.OnnxRuntime\Microsoft.ML.OnnxRuntime.csproj"
-			name="Microsoft.ML.OnnxRuntime" />
+			name="Microsoft.ML.OnnxRuntime.Managed" />
 		<ProjectReference
 			Include="..\Microsoft.ML.OnnxRuntime.Tests.Common\Microsoft.ML.OnnxRuntime.Tests.Common.csproj"
 			name="Microsoft.ML.OnnxRuntime.Tests.Common" />
