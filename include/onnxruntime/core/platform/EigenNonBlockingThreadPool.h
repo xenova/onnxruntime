@@ -775,7 +775,7 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
     const unsigned max_backoff_;
 
    public:
-    ThreadPoolWaiter(unsigned max_backoff)
+    explicit ThreadPoolWaiter(unsigned max_backoff)
         : max_backoff_(max_backoff) {
     }
 
@@ -1764,24 +1764,6 @@ class ThreadPoolTempl : public onnxruntime::concurrency::ExtendedThreadPoolInter
     *state = current * 6364136223846793005ULL + 0xda3e39cb94b95bdbULL;
     // Generate the random output (using the PCG-XSH-RS scheme)
     return static_cast<unsigned>((current ^ (current >> 22)) >> (22 + (current >> 61)));
-  }
-};
-
-template <typename Environment>
-class NormalThreadPoolTempl : public ThreadPoolTempl<Environment> {
- public:
-  NormalThreadPoolTempl(const CHAR_TYPE* name, int num_threads, bool allow_spinning, Environment& env,
-                        const ThreadOptions& thread_options)
-      : ThreadPoolTempl<Environment>(name, num_threads, allow_spinning, env, thread_options, /* is_hybrid */ false) {
-  }
-};
-
-template <typename Environment>
-class HybridThreadPoolTempl : public ThreadPoolTempl<Environment> {
- public:
-  HybridThreadPoolTempl(const CHAR_TYPE* name, int num_threads, bool allow_spinning, Environment& env,
-                        const ThreadOptions& thread_options)
-      : ThreadPoolTempl<Environment>(name, num_threads, allow_spinning, env, thread_options, /* is_hybrid */ true) {
   }
 };
 
