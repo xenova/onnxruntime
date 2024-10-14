@@ -783,6 +783,12 @@ std::vector<std::unique_ptr<ComputeCapability>> WebGpuExecutionProvider::GetCapa
                                << node.OpType() << " node name: " << node.Name();
       continue;
     }
+
+    if (node.Name() == "/model/embed_tokens/Gather") {
+      LOGS(*GetLogger(), INFO) << "Exclude " << node.Name();
+      continue;
+    }
+
     candidates.push_back(node.Index());
     tenative_candidates.push_back(node.Index());
   }
