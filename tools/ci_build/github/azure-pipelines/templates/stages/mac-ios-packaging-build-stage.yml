@@ -108,7 +108,6 @@ stages:
       displayName: 'Build App Center iPhone arm64 tests'
 
     - script: |
-<<<<<<< HEAD
         echo $(find . -name "*.xcworkspace")
       workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
       displayName: "Install Python requirements"
@@ -166,32 +165,6 @@ stages:
     #       --build-dir $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos \
     #       --token $(app_center_api_token)
     #   displayName: "Run E2E tests on App Center"
-=======
-        set -e -x
-        echo "$(find . -iname "*.ipa")"
-        echo "==================================================================="
-        echo "$(find . -iname "*debug*")"
-        echo "==================================================================="
-        cd $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos/ios_package_test.app
-        echo "$(ls)"
-        echo "==================================================================="
-        cd $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos/ios_package_testUITests-Runner.app
-        echo "$(ls)"
-      displayName: "Find app and tests files"
-
-    - script: |
-        set -e -x
-        cd tools/python
-        pip install requests
-        export BROWSERSTACK_ID=$(browserstack_username)
-        export BROWSERSTACK_TOKEN=$(browserstack_access_key)
-        python upload_and_run_browserstack_tests.py \
-          --test_platform espresso \
-          --app_apk_path "$(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos/ios_package_test.app" \
-          --test_apk_path "$(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos/ios_package_testUITests-Runner.app" \
-          --devices "Samsung Galaxy S23-13.0" "Google Pixel 3-9.0"
-      displayName: Run E2E tests using Browserstack
->>>>>>> f21a2d4d36bf53a0b04f8e3b159a71e2cf564e1d
 
     - script: |
         set -e -x
