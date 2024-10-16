@@ -19,9 +19,7 @@ jobs:
   workspace:
     clean: all
   pool:
-    # We need macOS-12 to run the Android emulator for now.
-    # https://github.com/actions/runner-images/issues/7671
-    vmImage: 'macOS-12'
+    vmImage: 'macOS-13'
   variables:
   - name: runCodesignValidationInjection
     value: false
@@ -39,9 +37,9 @@ jobs:
       targetPath: '$(Build.BinariesDirectory)/final-android-aar'
 
   - task: JavaToolInstaller@0
-    displayName: Use jdk 11
+    displayName: Use jdk 17
     inputs:
-      versionSpec: '11'
+      versionSpec: '17'
       jdkArchitectureOption: 'x64'
       jdkSourceOption: 'PreInstalled'
 
@@ -60,23 +58,28 @@ jobs:
       cd ./android
       mkdir -p app/libs
       cp $(Build.BinariesDirectory)/final-android-aar/${{parameters.packageName}}-$(OnnxRuntimeVersion).aar app/libs/onnxruntime-android.aar
+      $(Build.SourcesDirectory)/java/gradlew --no-daemon clean connectedDebugAndroidTest --stacktrace
     displayName: Run E2E test using Emulator
     workingDirectory: $(Build.BinariesDirectory)
 
+  - template: use-android-emulator.yml
+    parameters:
+      stop: true
+
   - script: |
       set -e -x
-      echo "$(find . -iname "*.apk")"
-      cd android_test/android/app/build/outputs/apk
-      echo "##vso[task.setvariable variable=apk_dir]$(pwd)"
       pip install requests
-    displayName: install requests
-    workingDirectory: $(Build.BinariesDirectory)
-
-  # - template: use-browserstack.yml
-
-#  - template: use-android-emulator.yml
- #   parameters:
-  #    stop: true
+      python $(Build.SourcesDirectory)/tools/python/upload_and_run_browserstack_tests.py \
+        --test_platform espresso \
+        --app_apk_path "debug/app-debug.apk" \
+        --test_apk_path "androidTest/debug/app-debug-androidTest.apk" \
+        --devices "Samsung Galaxy S23-13.0" "Google Pixel 3-9.0"
+    displayName: Run E2E tests using Browserstack
+    workingDirectory: $(Build.BinariesDirectory)/android_test/android/app/build/outputs/apk
+    timeoutInMinutes: 15
+    env:
+      BROWSERSTACK_ID: $(browserstack_username)
+      BROWSERSTACK_TOKEN: $(browserstack_access_key)
 
   - template: component-governance-component-detection-steps.yml
     parameters :
