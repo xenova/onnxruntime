@@ -140,7 +140,8 @@ stages:
     - script: |
         xcodebuild -exportArchive \
           -archivePath ios_package_test.xcarchive \
-          -exportOptionsPlist ./DerivedData/Build/Products/Debug-iphoneos/ios_package_test.app/Info.plist
+          -exportOptionsPlist ./DerivedData/Build/Products/Debug-iphoneos/ios_package_test.app/Info.plist \
+          -exportPath ipa_folder
       workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
       displayName: "Create .ipa file"
       env:
