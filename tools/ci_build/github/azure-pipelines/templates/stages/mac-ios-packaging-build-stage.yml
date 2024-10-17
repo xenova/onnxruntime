@@ -140,8 +140,6 @@ stages:
     - script: |
         xcodebuild -exportArchive \
           -archivePath ios_package_test.xcarchive \
-          -workspace $(Build.BinariesDirectory)/app_center_test/apple_package_test/apple_package_test.xcworkspace \
-          -sdk iphoneos \
           -derivedDataPath $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData \
           -exportOptionsPlist ./DerivedData/Build/Products/Debug-iphoneos/ios_package_test.app/Info.plist
       workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
