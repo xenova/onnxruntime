@@ -30,6 +30,12 @@ if __name__ == "__main__":
 
     team_id = os.environ["APPLE_TEAM_ID"]
     provisioning_profile_uuid = os.environ["PROVISIONING_PROFILE_UUID"]
+    formatted_plist = plist_file_content.format(team_id = team_id, provisioning_profile_uuid = provisioning_profile_uuid)
 
     with open(args.dest_file, 'w') as file:
-        file.write(plist_file_content.format(team_id = team_id, provisioning_profile_uuid = provisioning_profile_uuid))
+        file.write(formatted_plist)
+
+    print("wrote plist file to ", args.dest_file)
+    print()
+    print("contents of file:")
+    print(formatted_plist)

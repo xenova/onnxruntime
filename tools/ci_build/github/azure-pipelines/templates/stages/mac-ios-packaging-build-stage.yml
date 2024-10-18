@@ -136,11 +136,24 @@ stages:
       workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
       displayName: "find files"
 
+    - script: |
+        python $(Build.SourcesDirectory)/tools/python/generate_plist.py --dest_file "exportOptions.plist"
+      workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
+      displayName: "generate plist"
+      env:
+        PROVISIONING_PROFILE_UUID: '$(APPLE_PROV_PROFILE_UUID)'
+        APPLE_TEAM_ID: '$(APPLE_TEAM_ID)'
+
+    - script: |
+        echo $(find ~+ -name "*.plist" -type f)
+      workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
+      displayName: "find ipa file"
+
 # this will create the ipa file
     - script: |
         xcodebuild -exportArchive \
           -archivePath ios_package_test.xcarchive \
-          -exportOptionsPlist ./DerivedData/Build/Products/Debug-iphoneos/ios_package_test.app/Info.plist \
+          -exportOptionsPlist exportOptions.plist \
           -exportPath ipa_folder
       workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
       displayName: "Create .ipa file"
