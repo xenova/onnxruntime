@@ -138,9 +138,6 @@ stages:
         scheme: 'ios_package_test'
         xcodeVersion: 'specifyPath'
         xcodeDeveloperDir: '/Applications/Xcode_${{ variables.xcodeVersion }}.app/Contents/Developer'
-        signingOption: 'manual'
-        signingIdentity: '$(APPLE_CERTIFICATE_SIGNING_IDENTITY)'
-        provisioningProfileUuid: '$(APPLE_PROV_PROFILE_UUID)'
         args: '-derivedDataPath $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData'
         workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
         useXcpretty: false
