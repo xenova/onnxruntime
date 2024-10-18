@@ -112,14 +112,27 @@ stages:
       workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
       displayName: "Install Python requirements"
 
+    - script: |
+        python $(Build.SourcesDirectory)/tools/python/generate_plist.py --dest_file "exportOptions.plist"
+      workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
+      displayName: "generate plist"
+      env:
+        PROVISIONING_PROFILE_UUID: '$(APPLE_PROV_PROFILE_UUID)'
+        APPLE_TEAM_ID: '$(APPLE_TEAM_ID)'
+
+    - script: |
+        echo $(find ~+ -name "*.plist" -type f)
+      workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
+      displayName: "find plist file"
+
     - task: Xcode@5
       inputs:
         actions: 'archive'
         xcWorkspacePath: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/apple_package_test.xcworkspace'
         packageApp: true
         archivePath: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
-        exportOptions: 'specify'
-        exportMethod: 'development'
+        exportOptions: 'plist'
+        exportOptionsPlist: 'exportOptions.plist'
         configuration: 'Debug'
         sdk: 'iphoneos'
         scheme: 'ios_package_test'
@@ -128,7 +141,6 @@ stages:
         signingOption: 'manual'
         signingIdentity: '$(APPLE_CERTIFICATE_SIGNING_IDENTITY)'
         provisioningProfileUuid: '$(APPLE_PROV_PROFILE_UUID)'
-        teamId: '$(APPLE_TEAM_ID)'
         args: '-derivedDataPath $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData'
         workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
         useXcpretty: false
@@ -143,19 +155,6 @@ stages:
     #    echo $(find . -name "*.plist" -printf "%p\n")
       workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
       displayName: "find files"
-
-    - script: |
-        python $(Build.SourcesDirectory)/tools/python/generate_plist.py --dest_file "exportOptions.plist"
-      workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
-      displayName: "generate plist"
-      env:
-        PROVISIONING_PROFILE_UUID: '$(APPLE_PROV_PROFILE_UUID)'
-        APPLE_TEAM_ID: '$(APPLE_TEAM_ID)'
-
-    - script: |
-        echo $(find ~+ -name "*.plist" -type f)
-      workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
-      displayName: "find ipa file"
 
 # this will create the ipa file
     - script: |
