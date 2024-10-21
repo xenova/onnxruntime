@@ -7,7 +7,7 @@ plist_file_content = """
 <plist version="1.0">
 <dict>
     <key>method</key>
-    <string>debugging</string>
+    <string>development</string>
     <key>teamID</key>
     <string>{team_id}</string>
     <key>provisioningProfiles</key>
