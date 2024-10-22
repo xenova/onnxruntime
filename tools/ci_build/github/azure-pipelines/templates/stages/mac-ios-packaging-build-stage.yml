@@ -169,22 +169,22 @@ stages:
       workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
       displayName: "find ipa file"
 
-  - script: |
-      set -e -x
-      echo $(ls)
-      echo "============================================"
-      pip install requests
-      python $(Build.SourcesDirectory)/tools/python/upload_and_run_browserstack_tests.py \
-        --test_platform xcuitest \
-        --app_apk_path "ipa_folder/ios_package_test.ipa" \
-        --test_apk_path "package_tests.zip" \
-        --devices "Samsung Galaxy S23-13.0" "Google Pixel 3-9.0"
-    displayName: Run E2E tests using Browserstack
-    workingDirectory: $(Build.BinariesDirectory)/app_center_test/apple_package_test
-    timeoutInMinutes: 15
-    env:
-      BROWSERSTACK_ID: $(browserstack_username)
-      BROWSERSTACK_TOKEN: $(browserstack_access_key)
+    - script: |
+        set -e -x
+        echo $(ls)
+        echo "============================================"
+        pip install requests
+        python $(Build.SourcesDirectory)/tools/python/upload_and_run_browserstack_tests.py \
+          --test_platform xcuitest \
+          --app_apk_path "ipa_folder/ios_package_test.ipa" \
+          --test_apk_path "package_tests.zip" \
+          --devices "Samsung Galaxy S23-13.0" "Google Pixel 3-9.0"
+      displayName: Run E2E tests using Browserstack
+      workingDirectory: $(Build.BinariesDirectory)/app_center_test/apple_package_test
+      timeoutInMinutes: 15
+      env:
+        BROWSERSTACK_ID: $(browserstack_username)
+        BROWSERSTACK_TOKEN: $(browserstack_access_key)
 
     # - script: |
     #     set -e -x
