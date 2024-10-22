@@ -40,7 +40,12 @@ void ParseExecutionProviders(const Napi::Array epList, Ort::SessionOptions& sess
     Napi::Value epValue = epList[i];
     std::string name;
     int deviceId = 0;
+#ifdef USE_COREML
     int coreMlFlags = 0;
+#endif
+#ifdef USE_WEBGPU
+    std::unordered_map<std::string, std::string> webgpu_options;
+#endif
     if (epValue.IsString()) {
       name = epValue.As<Napi::String>().Utf8Value();
     } else if (!epValue.IsObject() || epValue.IsNull() || !epValue.As<Napi::Object>().Has("name") ||
@@ -53,9 +58,23 @@ void ParseExecutionProviders(const Napi::Array epList, Ort::SessionOptions& sess
       if (obj.Has("deviceId")) {
         deviceId = obj.Get("deviceId").As<Napi::Number>();
       }
+#ifdef USE_COREML
       if (obj.Has("coreMlFlags")) {
         coreMlFlags = obj.Get("coreMlFlags").As<Napi::Number>();
       }
+#endif
+#ifdef USE_WEBGPU
+      for (const auto& nameIter : obj.GetPropertyNames()) {
+        Napi::Value nameVar = nameIter.second;
+        std::string name = nameVar.As<Napi::String>().Utf8Value();
+        if (name != "name") {
+          Napi::Value valueVar = obj.Get(nameVar);
+          ORT_NAPI_THROW_TYPEERROR_IF(!valueVar.IsString(), epList.Env(), "Invalid argument: sessionOptions.executionProviders must be a string or an object with property 'name'.");
+          std::string value = valueVar.As<Napi::String>().Utf8Value();
+          webgpu_options[name] = value;
+        }
+      }
+#endif
     }
 
     // CPU execution provider
@@ -83,7 +102,7 @@ void ParseExecutionProviders(const Napi::Array epList, Ort::SessionOptions& sess
 #endif
 #ifdef USE_WEBGPU
     } else if (name == "webgpu") {
-      Ort::ThrowOnError(Ort::GetApi().SessionOptionsAppendExecutionProvider(sessionOptions, "WebGPU", nullptr, nullptr, 0));
+      sessionOptions.AppendExecutionProvider("WebGPU", webgpu_options);
 #endif
 #ifdef USE_COREML
     } else if (name == "coreml") {
@@ -99,6 +118,22 @@ void ParseExecutionProviders(const Napi::Array epList, Ort::SessionOptions& sess
     } else {
       ORT_NAPI_THROW_ERROR(epList.Env(), "Invalid argument: sessionOptions.executionProviders[", i,
                            "] is unsupported: '", name, "'.");
+    }
+  }
+}
+
+void IterateExtraOptions(const std::string& prefix, const Napi::Object& obj, Ort::SessionOptions& sessionOptions) {
+  for (const auto& kvp : obj) {
+    auto key = kvp.first.As<Napi::String>().Utf8Value();
+    Napi::Value value = kvp.second;
+    if (value.IsObject()) {
+      IterateExtraOptions(prefix + key + ".", value.As<Napi::Object>(), sessionOptions);
+    } else {
+      ORT_NAPI_THROW_TYPEERROR_IF(!value.IsString(), obj.Env(),
+                                  "Invalid argument: sessionOptions.extra value must be a string in Node.js binding.");
+      std::string entry = prefix + key;
+      auto val = value.As<Napi::String>().Utf8Value();
+      sessionOptions.AddConfigEntry(entry.c_str(), val.c_str());
     }
   }
 }
@@ -168,6 +203,28 @@ void ParseSessionOptions(const Napi::Object options, Ort::SessionOptions& sessio
     } else {
       sessionOptions.DisableMemPattern();
     }
+  }
+
+  // optimizedModelFilePath
+  if (options.Has("optimizedModelFilePath")) {
+    auto optimizedModelFilePathValue = options.Get("optimizedModelFilePath");
+    ORT_NAPI_THROW_TYPEERROR_IF(!optimizedModelFilePathValue.IsString(), options.Env(),
+                                "Invalid argument: sessionOptions.optimizedModelFilePath must be a string.");
+#ifdef _WIN32
+    auto str = optimizedModelFilePathValue.As<Napi::String>().Utf16Value();
+    std::basic_string<ORTCHAR_T> optimizedModelFilePath = std::wstring{str.begin(), str.end()};
+#else
+    std::basic_string<ORTCHAR_T> optimizedModelFilePath = optimizedModelFilePathValue.As<Napi::String>().Utf8Value();
+#endif
+    sessionOptions.SetOptimizedModelFilePath(optimizedModelFilePath.c_str());
+  }
+
+  // extra
+  if (options.Has("extra")) {
+    auto extraValue = options.Get("extra");
+    ORT_NAPI_THROW_TYPEERROR_IF(!extraValue.IsObject(), options.Env(),
+                                "Invalid argument: sessionOptions.extra must be an object.");
+    IterateExtraOptions("", extraValue.As<Napi::Object>(), sessionOptions);
   }
 
   // execution mode

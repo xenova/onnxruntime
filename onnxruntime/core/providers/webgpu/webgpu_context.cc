@@ -21,11 +21,12 @@
 namespace onnxruntime {
 namespace webgpu {
 
-void WebGpuContext::Initialize(const WebGpuExecutionProviderInfo& webgpu_ep_info) {
-  std::call_once(init_flag_, [this, &webgpu_ep_info]() {
+void WebGpuContext::Initialize(const WebGpuExecutionProviderInfo& webgpu_ep_info, const void* dawn_proc_table) {
+  std::call_once(init_flag_, [this, &webgpu_ep_info, dawn_proc_table]() {
     // Initialization.Step.1 - Create wgpu::Instance
     if (instance_ == nullptr) {
-      dawnProcSetProcs(&dawn::native::GetProcs());
+      dawnProcSetProcs(dawn_proc_table ? reinterpret_cast<const DawnProcTable*>(dawn_proc_table)
+                                       : &dawn::native::GetProcs());
 
       wgpu::InstanceDescriptor instance_desc{};
       instance_desc.features.timedWaitAnyEnable = true;
@@ -39,9 +40,10 @@ void WebGpuContext::Initialize(const WebGpuExecutionProviderInfo& webgpu_ep_info
       wgpu::RequestAdapterOptions req_adapter_options = {};
       wgpu::DawnTogglesDescriptor adapter_toggles_desc = {};
       req_adapter_options.nextInChain = &adapter_toggles_desc;
-#ifdef WIN32
+#ifdef _WIN32
       req_adapter_options.backendType = wgpu::BackendType::D3D12;
 #endif
+      req_adapter_options.powerPreference = wgpu::PowerPreference::HighPerformance;
 
       auto enabled_adapter_toggles = GetEnabledAdapterToggles();
       adapter_toggles_desc.enabledToggleCount = enabled_adapter_toggles.size();
@@ -570,17 +572,18 @@ void WebGpuContext::EndProfiling(TimePoint /* tp */, profiling::Events& events, 
   // This function is called when no active inference is ongoing.
   ORT_ENFORCE(!is_profiling_, "Profiling is ongoing in an inference run.");
 
-  // When profiling is disabled, should never run into this function.
-  ORT_ENFORCE(query_type_ != TimestampQueryType::None, "Timestamp query is not enabled.");
+  if (query_type_ != TimestampQueryType::None) {
+    // No pending kernels or queries should be present at this point. They should have been collected in CollectProfilingData.
+    ORT_ENFORCE(pending_kernels_.empty() && pending_queries_.empty(), "Pending kernels or queries are not empty.");
 
-  // No pending kernels or queries should be present at this point. They should have been collected in CollectProfilingData.
-  ORT_ENFORCE(pending_kernels_.empty() && pending_queries_.empty(), "Pending kernels or queries are not empty.");
+    events.insert(events.end(),
+                  std::make_move_iterator(cached_events.begin()),
+                  std::make_move_iterator(cached_events.end()));
 
-  events.insert(events.end(),
-                std::make_move_iterator(cached_events.begin()),
-                std::make_move_iterator(cached_events.end()));
-
-  cached_events.clear();
+    cached_events.clear();
+  } else {
+    LOGS_DEFAULT(WARNING) << "TimestampQuery is not supported in this device.";
+  }
 }
 
 void WebGpuContext::Flush() {
@@ -623,7 +626,7 @@ void WebGpuContext::Flush() {
 }
 
 std::unordered_map<int32_t, std::unique_ptr<WebGpuContext>> WebGpuContextFactory::contexts_;
-OrtMutex WebGpuContextFactory::mutex_;
+std::mutex WebGpuContextFactory::mutex_;
 
 WebGpuContext& WebGpuContextFactory::CreateContext(int context_id,
                                                    WGPUInstance instance,
@@ -640,7 +643,7 @@ WebGpuContext& WebGpuContextFactory::CreateContext(int context_id,
                 "WebGPU EP custom context (contextId>0) must have custom WebGPU instance, adapter and device.");
   }
 
-  std::lock_guard<OrtMutex> lock(mutex_);
+  std::lock_guard<std::mutex> lock(mutex_);
 
   auto it = contexts_.find(context_id);
   if (it == contexts_.end()) {
@@ -654,7 +657,7 @@ WebGpuContext& WebGpuContextFactory::CreateContext(int context_id,
 }
 
 WebGpuContext& WebGpuContextFactory::GetContext(int context_id) {
-  std::lock_guard<OrtMutex> lock(mutex_);
+  std::lock_guard<std::mutex> lock(mutex_);
 
   auto it = contexts_.find(context_id);
   ORT_ENFORCE(it != contexts_.end(), "WebGPU EP context ID ", context_id, " is not found.");

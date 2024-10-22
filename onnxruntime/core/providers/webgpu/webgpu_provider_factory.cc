@@ -17,12 +17,12 @@ using namespace onnxruntime::webgpu::options;
 namespace onnxruntime {
 
 struct WebGpuProviderFactory : IExecutionProviderFactory {
-  WebGpuProviderFactory(int context_id, webgpu::WebGpuContext& context, const WebGpuExecutionProviderInfo& webgpu_ep_info)
-      : context_id_{context_id}, context_{context}, info_{webgpu_ep_info} {
+  WebGpuProviderFactory(int context_id, webgpu::WebGpuContext& context, WebGpuExecutionProviderInfo&& webgpu_ep_info)
+      : context_id_{context_id}, context_{context}, info_{std::move(webgpu_ep_info)} {
   }
 
   std::unique_ptr<IExecutionProvider> CreateProvider() override {
-    return std::make_unique<WebGpuExecutionProvider>(context_id_, context_, info_);
+    return std::make_unique<WebGpuExecutionProvider>(context_id_, context_, std::move(info_));
   }
 
  private:
@@ -57,9 +57,9 @@ std::shared_ptr<IExecutionProviderFactory> WebGpuProviderFactoryCreator::Create(
 
   std::string enable_graph_capture_str;
   if (config_options.TryGetConfigEntry(kEnableGraphCapture, enable_graph_capture_str)) {
-    if (enable_graph_capture_str == kkEnableGraphCapture_ON) {
+    if (enable_graph_capture_str == kEnableGraphCapture_ON) {
       webgpu_ep_info.enable_graph_capture = true;
-    } else if (enable_graph_capture_str == kkEnableGraphCapture_OFF) {
+    } else if (enable_graph_capture_str == kEnableGraphCapture_OFF) {
       webgpu_ep_info.enable_graph_capture = false;
     } else {
       ORT_THROW("Invalid enable graph capture: ", enable_graph_capture_str);
@@ -121,6 +121,28 @@ std::shared_ptr<IExecutionProviderFactory> WebGpuProviderFactoryCreator::Create(
     }
   }
 
+  // parse force CPU node names
+  // The force CPU node names are separated by EOL (\n or \r\n) in the config entry.
+  // each line is a node name that will be forced to run on CPU.
+  std::string force_cpu_node_names_str;
+  if (config_options.TryGetConfigEntry(kForceCpuNodeNames, force_cpu_node_names_str)) {
+    std::vector<std::string> force_cpu_node_names;
+
+    // split the string by EOL (\n or \r\n)
+    std::istringstream ss(force_cpu_node_names_str);
+    std::string line;
+    while (std::getline(ss, line)) {
+      // skip empty lines
+      if (line.empty()) {
+        continue;
+      }
+
+      force_cpu_node_names.push_back(line);
+    }
+
+    webgpu_ep_info.force_cpu_node_names = std::move(force_cpu_node_names);
+  }
+
   //
   // STEP.2 - prepare WebGpuContext
   //
@@ -155,14 +177,21 @@ std::shared_ptr<IExecutionProviderFactory> WebGpuProviderFactoryCreator::Create(
                 std::from_chars(webgpu_device_str.data(), webgpu_device_str.data() + webgpu_device_str.size(), webgpu_device).ec);
   }
 
+  size_t dawn_proc_table = 0;
+  std::string dawn_proc_table_str;
+  if (config_options.TryGetConfigEntry(kDawnProcTable, dawn_proc_table_str)) {
+    ORT_ENFORCE(std::errc{} ==
+                std::from_chars(dawn_proc_table_str.data(), dawn_proc_table_str.data() + dawn_proc_table_str.size(), dawn_proc_table).ec);
+  }
+
   auto& context = webgpu::WebGpuContextFactory::CreateContext(context_id,
                                                               reinterpret_cast<WGPUInstance>(webgpu_instance),
                                                               reinterpret_cast<WGPUAdapter>(webgpu_adapter),
                                                               reinterpret_cast<WGPUDevice>(webgpu_device),
                                                               validation_mode);
-  context.Initialize(webgpu_ep_info);
+  context.Initialize(webgpu_ep_info, reinterpret_cast<const void*>(dawn_proc_table));
 
-  return std::make_shared<WebGpuProviderFactory>(context_id, context, webgpu_ep_info);
+  return std::make_shared<WebGpuProviderFactory>(context_id, context, std::move(webgpu_ep_info));
 }
 
 }  // namespace onnxruntime

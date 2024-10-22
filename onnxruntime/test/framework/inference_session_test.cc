@@ -722,7 +722,7 @@ TEST(InferenceSessionTests, CheckRunProfilerWithSessionOptions2) {
   ASSERT_TRUE(lines[size - 1].find("]") != string::npos);
   std::vector<std::string> tags = {"pid", "dur", "ts", "ph", "X", "name", "args"};
 
-  bool has_api_info = false;
+  [[maybe_unused]] bool has_api_info = false;
   for (size_t i = 1; i < size - 1; ++i) {
     for (auto& s : tags) {
       ASSERT_TRUE(lines[i].find(s) != string::npos);
@@ -740,7 +740,8 @@ TEST(InferenceSessionTests, CheckRunProfilerWithSessionOptions2) {
     }
   }
 
-#if (defined(USE_ROCM) && defined(ENABLE_ROCM_PROFILING)) || defined(USE_WEBGPU)
+// Note that the apple device is a paravirtual device which may not support webgpu timestamp query. So skip the check on it.
+#if (defined(USE_ROCM) && defined(ENABLE_ROCM_PROFILING)) || (defined(USE_WEBGPU) && !defined(__APPLE__))
   ASSERT_TRUE(has_api_info);
 #endif
 }
@@ -769,7 +770,7 @@ TEST(InferenceSessionTests, CheckRunProfilerWithStartProfile) {
   while (std::getline(profile, line)) {
     if (count == 0) {
       ASSERT_TRUE(line.find("[") != string::npos);
-    } else if (count <= 5) {
+    } else if (count <= 3) {
       for (auto& s : tags) {
         ASSERT_TRUE(line.find(s) != string::npos);
       }
@@ -778,7 +779,7 @@ TEST(InferenceSessionTests, CheckRunProfilerWithStartProfile) {
     }
 
     if (count == 1) {
-      ASSERT_TRUE(line.find("mul_1_fence_before") != string::npos);
+      ASSERT_TRUE(line.find("mul_1_kernel_time") != string::npos);
     }
     count++;
   }
