@@ -186,6 +186,16 @@ stages:
         BROWSERSTACK_ID: $(browserstack_username)
         BROWSERSTACK_TOKEN: $(browserstack_access_key)
 
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathToPublish: '$(Build.BinariesDirectory)/app_center_test/apple_package_test'
+        artifactName: package_tests.zip
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathToPublish: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/ipa_folder'
+        artifactName: ios_package_test.ipa
+
     # - script: |
     #     set -e -x
     #     appcenter test run xcuitest \

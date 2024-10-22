@@ -1,8 +1,18 @@
 import argparse
 import os
+import sys
 import time
+from pathlib import Path
 
 import requests
+
+script_description = """
+After building ONNXRuntime for Android or iOS, use this script to upload the app and test files to BrowserStack then
+run the tests on the specified devices.
+
+Find the Android test app in the repo here (as of rel-1.19.2):
+java/src/test/android
+"""
 
 
 def response_to_json(response):
@@ -15,7 +25,7 @@ def response_to_json(response):
 
 def upload_apk_parse_json(post_url, apk_path, id, token):
     with open(apk_path, "rb") as apk_file:
-        response = requests.post(post_url, files={"file": apk_file}, auth=(id, token))
+        response = requests.post(post_url, files={"file": apk_file}, auth=(id, token), timeout=180)
     return response_to_json(response)
 
 
@@ -33,6 +43,7 @@ def browserstack_build_request(devices, app_url, test_suite_url, test_platform, 
         headers=headers,
         json=json_data,
         auth=(id, token),
+        timeout=180,
     )
 
     return response_to_json(build_response)
@@ -50,6 +61,7 @@ def build_query_loop(build_id, test_platform, id, token):
         test_response = requests.get(
             f"https://api-cloud.browserstack.com/app-automate/{test_platform}/v2/builds/{build_id}",
             auth=(id, token),
+            timeout=30,
         )
 
         test_response_json = response_to_json(test_response)
@@ -60,13 +72,31 @@ def build_query_loop(build_id, test_platform, id, token):
 
 if __name__ == "__main__":
     # handle cli args
-    parser = argparse.ArgumentParser("Upload and run BrowserStack tests")
+    parser = argparse.ArgumentParser(script_description)
 
     parser.add_argument(
         "--test_platform", type=str, help="Testing platform", choices=["espresso", "xcuitest"], required=True
     )
-    parser.add_argument("--app_apk_path", type=str, help="Path to the app APK", required=True)
-    parser.add_argument("--test_apk_path", type=str, help="Path to the test suite APK", required=True)
+    parser.add_argument(
+        "--app_apk_path",
+        type=Path,
+        help=(
+            "Path to the app APK. "
+            "Typically, the app APK is in "
+            "{build_output_dir}/android_test/android/app/build/outputs/apk/debug/app-debug.apk"
+        ),
+        required=True,
+    )
+    parser.add_argument(
+        "--test_apk_path",
+        type=Path,
+        help=(
+            "Path to the test APK. "
+            "Typically, the test APK is in "
+            "{build_output_dir}/android_test/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+        ),
+        required=True,
+    )
     parser.add_argument(
         "--devices",
         type=str,
@@ -78,8 +108,15 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    browserstack_id = os.environ["BROWSERSTACK_ID"]
-    browserstack_token = os.environ["BROWSERSTACK_TOKEN"]
+    try:
+        browserstack_id = os.environ["BROWSERSTACK_ID"]
+        browserstack_token = os.environ["BROWSERSTACK_TOKEN"]
+    except KeyError:
+        print("Please set the environment variables BROWSERSTACK_ID and BROWSERSTACK_TOKEN")
+        print(
+            "These values will be found at https://app-automate.browserstack.com/dashboard/v2 & clicking 'ACCESS KEY'"
+        )
+        sys.exit(1)
 
     # Upload the app and test suites
     upload_app_json = upload_apk_parse_json(
