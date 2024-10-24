@@ -148,7 +148,7 @@ stages:
         echo $(find ~+ -name "*.ipa" -type f)
         echo $(find ~+ -name "*.Runner.app" -type f)
         mkdir zip_folder
-        zip -rL zip_folder/package_tests.zip $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos/ios_package_testUITests-Runner.app
+        zip -r zip_folder/package_tests.zip $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos/ios_package_testUITests-Runner.app
     #       --build-dir $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos \
     #    echo $(find . -name "*.plist" -printf "%p\n")
       workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
@@ -186,7 +186,7 @@ stages:
         python $(Build.SourcesDirectory)/tools/python/upload_and_run_browserstack_tests.py \
           --test_platform xcuitest \
           --app_apk_path "ipa_folder/ios_package_test.ipa" \
-          --test_apk_path "package_tests.zip" \
+          --test_apk_path "zip_folder/package_tests.zip" \
           --devices "Samsung Galaxy S23-13.0" "Google Pixel 3-9.0"
       displayName: Run E2E tests using Browserstack
       workingDirectory: $(Build.BinariesDirectory)/app_center_test/apple_package_test
