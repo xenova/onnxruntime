@@ -146,7 +146,7 @@ stages:
     - script: |
         echo $(find ~+ -name "*.xcarchive" -type f)
         echo $(find ~+ -name "*.ipa" -type f)
-        echo $(find ~+ -name "*.Runner.app" -type f)
+        echo $(find ~+ -name "*Runner.app")
         mkdir zip_folder
         zip -r --symlinks zip_folder/package_tests.zip $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos/ios_package_testUITests-Runner.app
     #       --build-dir $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos \
@@ -154,7 +154,12 @@ stages:
       workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
       displayName: "find files"
 
-# this will create the ipa file
+    - script: |
+        echo $(ls)
+        echo $(find ~+ -name ".plist")
+      workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos/ios_package_testUITests-Runner.app'
+      displayName: "find files"
+
     - script: |
         xcodebuild -exportArchive \
           -archivePath ios_package_test.xcarchive \
