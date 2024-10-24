@@ -148,7 +148,7 @@ stages:
         echo $(find ~+ -name "*.ipa" -type f)
         echo $(find ~+ -name "*.Runner.app" -type f)
         mkdir zip_folder
-        zip -rL zip_folder/package_tests.zip $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos/ios_package_testUITests-Runner.app
+        zip -r --symlinks zip_folder/package_tests.zip $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos/ios_package_testUITests-Runner.app
     #       --build-dir $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos \
     #    echo $(find . -name "*.plist" -printf "%p\n")
       workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
