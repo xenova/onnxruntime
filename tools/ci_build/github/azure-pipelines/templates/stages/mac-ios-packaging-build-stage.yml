@@ -144,27 +144,15 @@ stages:
       displayName: 'Create archive'
 
     - script: |
-        echo $(find ~+ -name "*.xcarchive" -type f)
-        echo $(find ~+ -name "*.ipa" -type f)
-        echo $(find ~+ -name "*Runner.app")
-        mkdir zip_folder
-        zip -r --symlinks zip_folder/package_tests.zip $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos/ios_package_testUITests-Runner.app
-    #       --build-dir $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos \
-    #    echo $(find . -name "*.plist" -printf "%p\n")
-      workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
-      displayName: "find files"
-
-    - script: |
-        echo $(ls)
-        echo $(find ~+ -name ".plist")
-      workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos/ios_package_testUITests-Runner.app'
-      displayName: "find files"
+        zip -r --symlinks $(Build.ArtifactStagingDirectory)/package_tests.zip ios_package_testUITests-Runner.app
+      workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos'
+      displayName: "find files + make zip"
 
     - script: |
         xcodebuild -exportArchive \
           -archivePath ios_package_test.xcarchive \
           -exportOptionsPlist exportOptions.plist \
-          -exportPath ipa_folder
+          -exportPath $(Build.ArtifactStagingDirectory)/test_ipa
       workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
       displayName: "Create .ipa file"
       env:
@@ -175,24 +163,18 @@ stages:
       workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
       displayName: "find ipa file"
 
-    - publish: "$(Build.BinariesDirectory)/app_center_test/apple_package_test/zip_folder"
-      artifact: "apple_package_test"
-      displayName: "Publish artifacts (zip file)"
-
-    - publish: "$(Build.BinariesDirectory)/app_center_test/apple_package_test/ipa_folder"
-      artifact: "apple_package_test_ipa_folder"
-      displayName: "Publish artifacts (ipa file)"
+    - publish: "$(Build.ArtifactStagingDirectory)"
+      artifact: "test_artifacts"
+      displayName: "Publish test artifacts"
 
     - script: |
         set -e -x
-        echo $(ls)
-        echo "============================================"
         pip install requests
         python $(Build.SourcesDirectory)/tools/python/upload_and_run_browserstack_tests.py \
           --test_platform xcuitest \
-          --app_apk_path "ipa_folder/ios_package_test.ipa" \
-          --test_apk_path "zip_folder/package_tests.zip" \
-          --devices "Samsung Galaxy S23-13.0" "Google Pixel 3-9.0"
+          --app_apk_path "$(Build.ArtifactStagingDirectory)/test_ipa/ios_package_test.ipa" \
+          --test_apk_path "$(Build.ArtifactStagingDirectory)/package_tests.zip" \
+          --devices "iPhone 15-17"
       displayName: Run E2E tests using Browserstack
       workingDirectory: $(Build.BinariesDirectory)/app_center_test/apple_package_test
       timeoutInMinutes: 15
