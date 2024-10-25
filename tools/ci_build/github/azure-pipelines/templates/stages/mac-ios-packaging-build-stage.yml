@@ -126,8 +126,6 @@ stages:
         xcWorkspacePath: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/apple_package_test.xcworkspace'
         packageApp: true
         archivePath: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
-        exportOptions: 'plist'
-        exportOptionsPlist: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/exportOptions.plist'
         configuration: 'Debug'
         sdk: 'iphoneos'
         scheme: 'ios_package_test'
