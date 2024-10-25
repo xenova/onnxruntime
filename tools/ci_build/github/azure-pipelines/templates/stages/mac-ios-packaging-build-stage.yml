@@ -108,31 +108,22 @@ stages:
       displayName: 'Build App Center iPhone arm64 tests'
 
     - script: |
-        echo $(find . -name "*.xcworkspace")
-      workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
-      displayName: "Install Python requirements"
+        zip -r --symlinks $(Build.ArtifactStagingDirectory)/package_tests.zip ios_package_testUITests-Runner.app
+      workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos'
+      displayName: "Create .zip file of the tests"
 
     - script: |
         python $(Build.SourcesDirectory)/tools/python/generate_plist.py --dest_file "exportOptions.plist"
       workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
-      displayName: "generate plist"
+      displayName: "Generate .plist file for the .ipa file"
       env:
         PROVISIONING_PROFILE_UUID: '$(APPLE_PROV_PROFILE_UUID)'
         APPLE_TEAM_ID: '$(APPLE_TEAM_ID)'
-
-    - script: |
-        echo $(find ~+ -name "*.plist" -type f)
-      workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
-      displayName: "find plist file"
 
     - task: Xcode@5
       inputs:
         actions: 'archive'
         xcWorkspacePath: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/apple_package_test.xcworkspace'
-        packageApp: true
-        archivePath: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
-        exportOptions: 'plist'
-        exportOptionsPlist: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/exportOptions.plist'
         configuration: 'Debug'
         sdk: 'iphoneos'
         scheme: 'ios_package_test'
@@ -141,13 +132,11 @@ stages:
         args: '-derivedDataPath $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData'
         workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
         useXcpretty: false
-      displayName: 'Create archive'
+      displayName: 'Create archive for the .ipa file'
 
-    - script: |
-        zip -r --symlinks $(Build.ArtifactStagingDirectory)/package_tests.zip ios_package_testUITests-Runner.app
-      workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos'
-      displayName: "find files + make zip"
-
+    # Use script step because exporting the .ipa file using the Xcode@5 task was too brittle (Xcode@5 is designed
+    # to handle both the .xcarchive step and the .ipa step in the same step -- ran into countless issues with signing
+    # and the .plist file)
     - script: |
         xcodebuild -exportArchive \
           -archivePath ios_package_test.xcarchive \
@@ -158,14 +147,11 @@ stages:
       env:
         DEVELOPER_DIR: /Applications/Xcode_${{ variables.xcodeVersion }}.app/Contents/Developer
 
-    - script: |
-        echo $(find ~+ -name "*.ipa" -type f)
-      workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
-      displayName: "find ipa file"
-
+    # Publish the BrowserStack artifacts first so that if the next step fails, the artifacts will still be published
+    # so that users can attempt to locally debug
     - publish: "$(Build.ArtifactStagingDirectory)"
-      artifact: "test_artifacts"
-      displayName: "Publish test artifacts"
+      artifact: "browserstack_test_artifacts"
+      displayName: "Publish BrowserStack test artifacts"
 
     - script: |
         set -e -x
@@ -181,17 +167,6 @@ stages:
       env:
         BROWSERSTACK_ID: $(browserstack_username)
         BROWSERSTACK_TOKEN: $(browserstack_access_key)
-
-    # - script: |
-    #     set -e -x
-    #     appcenter test run xcuitest \
-    #       --app "AI-Frameworks/ORT-Mobile-iOS" \
-    #       --devices $(app_center_test_devices) \
-    #       --test-series "master" \
-    #       --locale "en_US" \
-    #       --build-dir $(Build.BinariesDirectory)/app_center_test/apple_package_test/DerivedData/Build/Products/Debug-iphoneos \
-    #       --token $(app_center_api_token)
-    #   displayName: "Run E2E tests on App Center"
 
     - script: |
         set -e -x
