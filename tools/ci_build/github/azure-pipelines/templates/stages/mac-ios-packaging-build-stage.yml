@@ -124,6 +124,10 @@ stages:
       inputs:
         actions: 'archive'
         xcWorkspacePath: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/apple_package_test.xcworkspace'
+        packageApp: true
+        archivePath: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
+        exportOptions: 'plist'
+        exportOptionsPlist: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/exportOptions.plist'
         configuration: 'Debug'
         sdk: 'iphoneos'
         scheme: 'ios_package_test'
@@ -133,6 +137,11 @@ stages:
         workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
         useXcpretty: false
       displayName: 'Create archive for the .ipa file'
+
+    - script: |
+        echo $(find ~+ -name "*.ipa" -type f)
+      workingDirectory: '$(Build.BinariesDirectory)/app_center_test/apple_package_test/'
+      displayName: "find ipa file"
 
     # Use script step because exporting the .ipa file using the Xcode@5 task was too brittle (Xcode@5 is designed
     # to handle both the .xcarchive step and the .ipa step in the same step -- ran into countless issues with signing
