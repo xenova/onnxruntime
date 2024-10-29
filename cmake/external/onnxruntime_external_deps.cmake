@@ -672,7 +672,10 @@ if (onnxruntime_USE_WEBGPU)
     add_compile_definitions(ORT_WEBGPU_NO_FP16_IN_UNIFORMS)
   endif()
 
-  list(APPEND onnxruntime_EXTERNAL_LIBRARIES dawn::dawn_native dawn::dawn_proc)
+  if (NOT onnxruntime_USE_EXTERNAL_DAWN)
+    list(APPEND onnxruntime_EXTERNAL_LIBRARIES dawn::dawn_native)
+  endif()
+  list(APPEND onnxruntime_EXTERNAL_LIBRARIES dawn::dawn_proc)
 endif()
 
 set(onnxruntime_LINK_DIRS)
