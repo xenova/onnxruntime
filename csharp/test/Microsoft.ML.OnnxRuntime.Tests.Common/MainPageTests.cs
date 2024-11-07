@@ -7,22 +7,20 @@ using OpenQA.Selenium.Appium;
 using OpenQA.Selenium.Appium.Windows;
 using Xunit;
 
-namespace Microsoft.ML.OnnxRuntime.Tests
+namespace Microsoft.ML.OnnxRuntime.Tests;
+public class MainPageTests
 {
-    public class MainPageTests
+    protected AppiumDriver App => AppiumSetup.App;
+
+    [Fact]
+    public void ClickRunAllTest()
     {
-        protected AppiumDriver App => AppiumSetup.App;
+        var element = App.FindElement(By.XPath(".//*[text()='Run All  ►►']"));
 
-        [Fact]
-        public void ClickRunAllTest()
-        {
-            var element = App.FindElement(By.XPath(".//*[text()='Run All  ►►']"));
+        Assert.Equal(element.Text, "Run All  ►►");
 
-            Assert.Equal(element.Text, "Run All  ►►");
+        element.Click();
 
-            element.Click();
-
-            Task.Delay(600).Wait();
-        }
+        Task.Delay(600).Wait();
     }
 }
