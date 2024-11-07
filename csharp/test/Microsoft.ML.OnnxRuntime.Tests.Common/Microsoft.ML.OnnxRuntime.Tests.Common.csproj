@@ -98,6 +98,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Appium.WebDriver" Version="6.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.0" />
     <PackageReference Include="Google.Protobuf" Version="3.21.12" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
@@ -110,14 +111,12 @@
 
   <!-- generate OnnxMl.cs from ONNX protobuf definition -->
   <Target Name="ProtoGen" BeforeTargets="BeforeBuild" Condition="Exists('$(ProtocExe)')">
-    <Exec Command="$(ProtocExe) -I=$(ProtoSrc) --csharp_out=. $(ProtoSrc)\onnx\onnx-ml.proto3"
-        ContinueOnError="false">
+    <Exec Command="$(ProtocExe) -I=$(ProtoSrc) --csharp_out=. $(ProtoSrc)\onnx\onnx-ml.proto3" ContinueOnError="false">
     </Exec>
   </Target>
 
   <Target Name="ProtoDataGen" BeforeTargets="BeforeBuild" Condition="Exists('$(ProtocExe)')">
-    <Exec Command="$(ProtocExe) -I=$(ProtoSrc) --csharp_out=. $(ProtoSrc)\onnx\onnx-data.proto3"
-        ContinueOnError="false">
+    <Exec Command="$(ProtocExe) -I=$(ProtoSrc) --csharp_out=. $(ProtoSrc)\onnx\onnx-data.proto3" ContinueOnError="false">
     </Exec>
   </Target>
 
