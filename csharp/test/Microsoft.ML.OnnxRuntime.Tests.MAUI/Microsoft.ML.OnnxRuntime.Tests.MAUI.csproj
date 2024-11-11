@@ -85,15 +85,9 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference
-            Include="..\..\src\Microsoft.ML.OnnxRuntime\Microsoft.ML.OnnxRuntime.csproj"
-            name="Microsoft.ML.OnnxRuntime" />
-        <ProjectReference
-            Include="..\Microsoft.ML.OnnxRuntime.Tests.Common\Microsoft.ML.OnnxRuntime.Tests.Common.csproj"
-            name="Microsoft.ML.OnnxRuntime.Tests.Common" />
-        <ProjectReference
-            Include="..\Microsoft.ML.OnnxRuntime.Tests.Devices\Microsoft.ML.OnnxRuntime.Tests.Devices.csproj"
-            name="Microsoft.ML.OnnxRuntime.Tests.Devices" />
+        <ProjectReference Include="..\..\src\Microsoft.ML.OnnxRuntime\Microsoft.ML.OnnxRuntime.csproj" name="Microsoft.ML.OnnxRuntime" />
+        <ProjectReference Include="..\Microsoft.ML.OnnxRuntime.Tests.Common\Microsoft.ML.OnnxRuntime.Tests.Common.csproj" name="Microsoft.ML.OnnxRuntime.Tests.Common" />
+        <ProjectReference Include="..\Microsoft.ML.OnnxRuntime.Tests.Devices\Microsoft.ML.OnnxRuntime.Tests.Devices.csproj" name="Microsoft.ML.OnnxRuntime.Tests.Devices" />
     </ItemGroup>
 
     <ItemGroup>
@@ -105,6 +99,7 @@
         <PackageReference Include="Microsoft.Maui.Controls" Version="8.0.70" />
         <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="8.0.70" />
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
+        <PackageReference Include="Plugin.Maui.UITestHelpers.Appium" Version="1.0.0-preview3" />
         <PackageReference Include="xunit" Version="2.9.0" />
         <PackageReference Include="xunit.runner.utility" Version="2.9.0" />
     </ItemGroup>
@@ -116,9 +111,7 @@
 
     <Target Name="RemoveVisualStudioTestRunner" BeforeTargets="_ComputeAppxPackagePayload">
         <ItemGroup>
-            <_VisualStudioTestRunnerFiles
-                Include="@(PackagingOutputs)"
-                Condition="$([System.String]::Copy('%(PackagingOutputs.FullPath)').Contains('xunit.runner.visualstudio'))" />
+            <_VisualStudioTestRunnerFiles Include="@(PackagingOutputs)" Condition="$([System.String]::Copy('%(PackagingOutputs.FullPath)').Contains('xunit.runner.visualstudio'))" />
             <PackagingOutputs Remove="@(_VisualStudioTestRunnerFiles)" />
         </ItemGroup>
     </Target>
