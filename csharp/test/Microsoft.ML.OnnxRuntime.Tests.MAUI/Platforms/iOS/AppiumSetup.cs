@@ -4,10 +4,10 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using OpenQA.Selenium.Appium;
-using OpenQA.Selenium.Appium.Windows;
+using OpenQA.Selenium.Appium.iOS;
 
 namespace Microsoft.ML.OnnxRuntime.Tests;
-public class AppiumSetup : IDisposable
+public partial class AppiumSetup
 {
     private static AppiumDriver? driver;
 
@@ -19,19 +19,20 @@ public class AppiumSetup : IDisposable
         // This line starts a local Appium server for you as part of the test run
         AppiumServerHelper.StartAppiumLocalServer();
 
-        var windowsOptions = new AppiumOptions
+        var iOSOptions = new AppiumOptions
         {
             // Specify windows as the driver, typically don't need to change this
-            AutomationName = "windows",
+            AutomationName = "XCUITest",
             // Always Windows for Windows
-            PlatformName = "Windows",
+            PlatformName = "iOS",
+            PlatformVersion = "17.0",
             // The identifier of the deployed application to test
             App = "ORT.CSharp.Tests.MAUI",
         };
 
         // Note there are many more options that you can use to influence the app under test according to your needs
 
-        driver = new WindowsDriver(windowsOptions);
+        driver = new IOSDriver(iOSOptions);
     }
 
     public void Dispose()

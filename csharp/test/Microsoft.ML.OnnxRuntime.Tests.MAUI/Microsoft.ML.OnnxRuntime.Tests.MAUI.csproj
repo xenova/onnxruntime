@@ -85,15 +85,9 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference
-            Include="..\..\src\Microsoft.ML.OnnxRuntime\Microsoft.ML.OnnxRuntime.csproj"
-            name="Microsoft.ML.OnnxRuntime" />
-        <ProjectReference
-            Include="..\Microsoft.ML.OnnxRuntime.Tests.Common\Microsoft.ML.OnnxRuntime.Tests.Common.csproj"
-            name="Microsoft.ML.OnnxRuntime.Tests.Common" />
-        <ProjectReference
-            Include="..\Microsoft.ML.OnnxRuntime.Tests.Devices\Microsoft.ML.OnnxRuntime.Tests.Devices.csproj"
-            name="Microsoft.ML.OnnxRuntime.Tests.Devices" />
+        <ProjectReference Include="..\..\src\Microsoft.ML.OnnxRuntime\Microsoft.ML.OnnxRuntime.csproj" name="Microsoft.ML.OnnxRuntime" />
+        <ProjectReference Include="..\Microsoft.ML.OnnxRuntime.Tests.Common\Microsoft.ML.OnnxRuntime.Tests.Common.csproj" name="Microsoft.ML.OnnxRuntime.Tests.Common" />
+        <ProjectReference Include="..\Microsoft.ML.OnnxRuntime.Tests.Devices\Microsoft.ML.OnnxRuntime.Tests.Devices.csproj" name="Microsoft.ML.OnnxRuntime.Tests.Devices" />
     </ItemGroup>
 
     <ItemGroup>
@@ -109,16 +103,44 @@
         <PackageReference Include="xunit.runner.utility" Version="2.9.0" />
     </ItemGroup>
 
-    <ItemGroup Condition="$(IsIOSTarget)=='true' OR $(IsMacCatalystTarget)=='true'">
-        <!-- need the dummy ORT Extensions package to resolve the RegisterCustomOps symbol. -->
-        <PackageReference Include="Microsoft.ML.OnnxRuntime.Extensions.Dummy" Version="0.12.0" />
-    </ItemGroup>
+	<ItemGroup Condition="$(IsIOSTarget)=='true' OR $(IsMacCatalystTarget)=='true'">
+		<!-- need the dummy ORT Extensions package to resolve the RegisterCustomOps symbol. -->
+		<PackageReference Include="Microsoft.ML.OnnxRuntime.Extensions.Dummy" Version="0.12.0" />
+	</ItemGroup>
+
+	<!--<SupportedOSPlatformVersion Condition="'$(IsIOSTarget)' == 'true'">15.0</SupportedOSPlatformVersion>
+	<SupportedOSPlatformVersion Condition="'$(IsMacCatalystTarget)' == 'true'">13.1</SupportedOSPlatformVersion>
+	<SupportedOSPlatformVersion Condition="'$(IsAndroidTarget)' == 'true'">30.0</SupportedOSPlatformVersion>
+	<SupportedOSPlatformVersion Condition="'$(IsWindowsTarget)' == 'true'">10.0.17763.0</SupportedOSPlatformVersion>
+	<TargetPlatformMinVersion Condition="'$(IsWindowsTarget)' == 'true'">10.0.17763.0</TargetPlatformMinVersion>-->
+
+	<!-- Android -->
+	<ItemGroup Condition="'$(IsAndroidTarget)' != 'true'">
+		<Compile Remove="**\Android\**\*.cs" />
+		<None Include="**\Android\**\*.cs" Exclude="$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder)" />
+	</ItemGroup>
+
+	<!-- iOS -->
+	<ItemGroup Condition="'$(IsIOSTarget)' != 'true'">
+		<Compile Remove="**\iOS\**\*.cs" />
+		<None Include="**\iOS\**\*.cs" Exclude="$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder)" />
+	</ItemGroup>
+
+	<!-- Mac Catalyst -->
+	<ItemGroup Condition="'$(IsMacCatalystTarget)' != 'true'">
+		<Compile Remove="**\MacCatalyst\**\*.cs" />
+		<None Include="**\MacCatalyst\**\*.cs" Exclude="$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder)" />
+	</ItemGroup>
+
+	<!-- Windows -->
+	<ItemGroup Condition="'$(IsWindowsTarget)' != 'true'">
+		<Compile Remove="**\Windows\**\*.cs" />
+		<None Include="**\Windows\**\*.cs" Exclude="$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder)" />
+	</ItemGroup>
 
     <Target Name="RemoveVisualStudioTestRunner" BeforeTargets="_ComputeAppxPackagePayload">
         <ItemGroup>
-            <_VisualStudioTestRunnerFiles
-                Include="@(PackagingOutputs)"
-                Condition="$([System.String]::Copy('%(PackagingOutputs.FullPath)').Contains('xunit.runner.visualstudio'))" />
+            <_VisualStudioTestRunnerFiles Include="@(PackagingOutputs)" Condition="$([System.String]::Copy('%(PackagingOutputs.FullPath)').Contains('xunit.runner.visualstudio'))" />
             <PackagingOutputs Remove="@(_VisualStudioTestRunnerFiles)" />
         </ItemGroup>
     </Target>
