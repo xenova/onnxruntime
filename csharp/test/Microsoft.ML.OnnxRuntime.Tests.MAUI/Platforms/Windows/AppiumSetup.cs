@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using OpenQA.Selenium.Appium;
 using OpenQA.Selenium.Appium.Windows;
 
-namespace Microsoft.ML.OnnxRuntime.Tests;
+namespace Microsoft.ML.OnnxRuntime.Tests.MAUI;
 public partial class AppiumSetup
 {
     private static AppiumDriver? driver;
@@ -26,7 +26,7 @@ public partial class AppiumSetup
             // Always Windows for Windows
             PlatformName = "Windows",
             // The identifier of the deployed application to test
-            App = "Microsoft.ML.OnnxRuntime.Tests.MAUI",
+            App = "ORT.CSharp.Tests.MAUI",
         };
 
         // Note there are many more options that you can use to influence the app under test according to your needs

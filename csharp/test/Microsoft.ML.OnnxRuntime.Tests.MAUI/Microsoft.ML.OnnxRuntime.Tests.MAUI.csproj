@@ -100,6 +100,7 @@
         <PackageReference Include="Microsoft.Maui.Controls" Version="8.0.70" />
         <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="8.0.70" />
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
         <PackageReference Include="xunit" Version="2.9.0" />
         <PackageReference Include="xunit.runner.utility" Version="2.9.0" />
         <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
@@ -135,9 +136,6 @@
 	<ItemGroup Condition="'$(IsWindowsTarget)' != 'true'">
 		<Compile Remove="**\Windows\**\*.cs" />
 		<None Include="**\Windows\**\*.cs" Exclude="$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder)" />
-		<!-- TODO: REMOVE THIS LATER THIS IS FOR DEBUGGING-->
-		<Compile Remove="TensorTests.cs" />
-		<None Include="TensorTests.cs" Exclude="$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder)" />
 	</ItemGroup>
 
     <Target Name="RemoveVisualStudioTestRunner" BeforeTargets="_ComputeAppxPackagePayload">
@@ -150,4 +148,7 @@
 	<!--<PropertyGroup>
 		<GenerateRuntimeConfigDevFile>true</GenerateRuntimeConfigDevFile>
 	</PropertyGroup>-->
+	<PropertyGroup>
+		<GenerateProgramFile>false</GenerateProgramFile>
+	</PropertyGroup>
 </Project>
