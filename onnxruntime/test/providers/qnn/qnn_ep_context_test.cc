@@ -1125,6 +1125,36 @@ TEST_F(QnnHTPBackendTests, QnnContextShareAcrossSessions2) {
   }
   std::remove(last_qnn_ctx_binary_file_name.c_str());
 }
+
+TEST(QnnEP, QNN_mem_leak) {
+  ProviderOptions provider_options;
+#if defined(_WIN32)
+  provider_options["backend_path"] = "QnnHtp.dll";
+#else
+  provider_options["backend_path"] = "libQnnHtp.so";
+#endif
+
+  try {
+    Ort::SessionOptions so;
+    Ort::Session session1(*(ort_env.get()), ORT_TSTR("C:/QNN/gai_phi35/token_gen/token_gen_no_GQA.onnx"), so);
+  } catch (...) {
+    std::cout << "Exception" << std::endl;
+  }
+
+  std::cout << "Session with CPU EP, memory should back to normal." << std::endl;
+
+  try {
+    Ort::SessionOptions so1;
+    //so1.SetLogSeverityLevel(0);
+    so1.AppendExecutionProvider("QNN", provider_options);
+    Ort::Session session1(*(ort_env.get()), ORT_TSTR("C:/QNN/gai_phi35/token_gen/token_gen_no_GQA.onnx"), so1);
+  } catch (...) {
+    std::cout << "Exception" << std::endl;
+  }
+
+  std::cout << "Session with QNN HTP, memory leak." << std::endl;
+
+}
 #endif  // defined(__aarch64__) || defined(_M_ARM64) || defined(__linux__)
 
 }  // namespace test
