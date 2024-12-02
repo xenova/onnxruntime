@@ -46,6 +46,7 @@ if [ $RunTestCsharp = "true" ]; then
   else
     dotnet test $BUILD_SOURCESDIRECTORY/csharp/test/Microsoft.ML.OnnxRuntime.EndToEndTests/Microsoft.ML.OnnxRuntime.EndToEndTests.csproj --no-restore --verbosity detailed
   fi
+  ls -lR $BUILD_SOURCESDIRECTORY/csharp/test/Microsoft.ML.OnnxRuntime.EndToEndTests
   if [ $? -ne 0 ]; then
     echo "Failed to build or execute the end-to-end test"
     exit 1
