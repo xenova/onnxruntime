@@ -65,7 +65,8 @@ class KernelRegistry {
 
   static bool HasImplementationOf(const KernelRegistry& r, const Node& node,
                                   ProviderType exec_provider,
-                                  const IKernelTypeStrResolver& kernel_type_str_resolver) {
+                                  const IKernelTypeStrResolver& kernel_type_str_resolver,
+                                  const logging::Logger& logger) {
     const KernelCreateInfo* info;
     Status st = r.TryFindKernel(node, exec_provider, kernel_type_str_resolver, &info);
     return st.IsOK();
