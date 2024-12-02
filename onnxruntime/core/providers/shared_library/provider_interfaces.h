@@ -202,7 +202,8 @@ struct ProviderHost {
 
   virtual std::unordered_set<NodeIndex> GetCpuPreferredNodes(const onnxruntime::GraphViewer& graph,
                                                              const IExecutionProvider::IKernelLookup& kernel_lookup,
-                                                             gsl::span<const NodeIndex> tentative_nodes) = 0;
+                                                             gsl::span<const NodeIndex> tentative_nodes,
+                                                             const logging::Logger& logger) = 0;
 
   virtual Status UnpackTensor(const ONNX_NAMESPACE::TensorProto& tensor, const void* raw_data, size_t raw_data_len, /*out*/ bool* p_data, size_t expected_size) = 0;
   virtual Status UnpackTensor(const ONNX_NAMESPACE::TensorProto& tensor, const void* raw_data, size_t raw_data_len, /*out*/ float* p_data, size_t expected_size) = 0;
