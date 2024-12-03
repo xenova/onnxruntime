@@ -372,8 +372,8 @@ constexpr ONNXTensorElementDataType GetONNXTensorElementDataType<UInt4x2>() {
 
 namespace QDQ {
 inline std::pair<std::vector<std::unique_ptr<NodeUnit>>, std::unordered_map<const Node*, const NodeUnit*>>
-GetAllNodeUnits(const GraphViewer* graph_viewer) {
-  return g_host->QDQ__GetAllNodeUnits(graph_viewer);
+GetAllNodeUnits(const GraphViewer* graph_viewer, const logging::Logger& logger) {
+  return g_host->QDQ__GetAllNodeUnits(graph_viewer, logger);
 }
 }  // namespace QDQ
 

@@ -81,6 +81,7 @@ NnapiExecutionProvider::~NnapiExecutionProvider() {}
 std::vector<std::unique_ptr<ComputeCapability>>
 NnapiExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_viewer,
                                       const IKernelLookup& /*kernel_lookup*/) const {
+  const auto& logger = GetLogger();
   std::vector<std::unique_ptr<ComputeCapability>> result;
 
   // TODO: Task 812756: NNAPI EP, add support for subgraph (If and Loop operators)
@@ -101,7 +102,7 @@ NnapiExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_view
     return ORT_NNAPI_MAX_SUPPORTED_API_LEVEL;
 #endif
   }();
-  LOGS_DEFAULT(VERBOSE) << "Effective NNAPI feature level: " << android_feature_level;
+  LOGS(logger, VERBOSE) << "Effective NNAPI feature level: " << android_feature_level;
 
   const nnapi::OpSupportCheckParams params{
       android_feature_level,
@@ -109,7 +110,7 @@ NnapiExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_view
   };
 
   if (params.android_feature_level < ORT_NNAPI_MIN_API_LEVEL) {
-    LOGS_DEFAULT(WARNING) << "All ops will fallback to CPU EP, because system NNAPI feature level ["
+    LOGS(logger, WARNING) << "All ops will fallback to CPU EP, because system NNAPI feature level ["
                           << params.android_feature_level
                           << "] is lower than minimal supported NNAPI API feature level ["
                           << ORT_NNAPI_MIN_API_LEVEL
@@ -121,7 +122,7 @@ NnapiExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_view
   std::vector<std::unique_ptr<NodeUnit>> node_unit_holder;
   std::unordered_map<const Node*, const NodeUnit*> node_unit_map;
 
-  std::tie(node_unit_holder, node_unit_map) = QDQ::GetAllNodeUnits(graph_viewer);
+  std::tie(node_unit_holder, node_unit_map) = QDQ::GetAllNodeUnits(graph_viewer, logger);
 
   // This holds the result of whether a NodeUnit is supported or not,
   // to prevent nodes in a NodeUnit to be checked for multiple times
@@ -150,7 +151,7 @@ NnapiExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_view
       node_unit_supported_result[node_unit] = supported;
     }
 
-    LOGS_DEFAULT(VERBOSE) << "Node supported: [" << supported
+    LOGS(logger, VERBOSE) << "Node supported: [" << supported
                           << "] Operator type: [" << node.OpType()
                           << "] index: [" << node.Index()
                           << "] name: [" << node.Name()
@@ -224,9 +225,9 @@ NnapiExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_view
   // If the graph is partitioned in multiple subgraphs, and this may impact performance,
   // we want to give users a summary message at warning level.
   if (num_of_partitions > 1) {
-    LOGS_DEFAULT(WARNING) << summary_msg;
+    LOGS(logger, WARNING) << summary_msg;
   } else {
-    LOGS_DEFAULT(INFO) << summary_msg;
+    LOGS(logger, INFO) << summary_msg;
   }
 
   return result;
