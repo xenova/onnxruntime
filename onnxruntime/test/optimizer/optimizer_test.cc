@@ -27,6 +27,7 @@ namespace test {
 TEST(OptimizerTest, Basic) {
   Model model("OptimizerBasic", false, ModelMetaData(), PathString(), IOnnxRuntimeOpSchemaRegistryList(),
               {{kOnnxDomain, 12}}, {}, DefaultLoggingManager().DefaultLogger());
+  const logging::Logger& logger = DefaultLoggingManager().DefaultLogger();
   auto& graph = model.MainGraph();
 
   constexpr int tensor_dim = 10;
@@ -71,17 +72,16 @@ TEST(OptimizerTest, Basic) {
       [&graph](const std::string& name) -> bool {
         return graph.IsSparseInitializer(name);
       },
-      DefaultLoggingManager().DefaultLogger());
+      logger);
 #else
   OptimizerExecutionFrame::Info info(
       nodes, initialized_tensor_set, graph.ModelPath(), *cpu_execution_provider.get(),
       [](std::string const&) { return false; },
-      DefaultLoggingManager().DefaultLogger());
+      logger);
 #endif  //! defined(DISABLE_SPARSE_TENSORS)
 
   std::vector<int> fetch_mlvalue_idxs{info.GetMLValueIndex("out")};
   OptimizerExecutionFrame frame(info, fetch_mlvalue_idxs);
-  const logging::Logger& logger = DefaultLoggingManager().DefaultLogger();
 
   const ConfigOptions empty_config_options;
 
