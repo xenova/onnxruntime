@@ -274,11 +274,13 @@ static Status GetOutputBuffer(Ort::KernelContext& context,
 common::Status NnapiExecutionProvider::Compile(const std::vector<FusedNodeAndGraph>& fused_nodes_and_graphs,
                                                std::vector<NodeComputeInfo>& node_compute_funcs) {
   using namespace android::nn::wrapper;
+  const auto& logger = *GetLogger();
+
   for (const auto& fused_node_and_graph : fused_nodes_and_graphs) {
     Node& fused_node = fused_node_and_graph.fused_node;
     const onnxruntime::GraphViewer& graph_viewer(fused_node_and_graph.filtered_graph);
 
-    nnapi::ModelBuilder builder(graph_viewer, *nnapi_handle_, nnapi_target_devices_, target_device_option_);
+    nnapi::ModelBuilder builder(graph_viewer, *nnapi_handle_, nnapi_target_devices_, target_device_option_, logger);
     builder.SetUseNCHW(nnapi_flags_ & NNAPI_FLAG_USE_NCHW);
     builder.SetUseFp16(nnapi_flags_ & NNAPI_FLAG_USE_FP16);
 

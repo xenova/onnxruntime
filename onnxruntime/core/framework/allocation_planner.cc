@@ -150,7 +150,8 @@ class PlannerImpl {
         subgraphs_kernel_create_info_maps_(subgraphs_kernel_create_info_maps),
         outer_scope_node_arg_to_location_map_(outer_scope_node_arg_to_location_map),
         ort_value_name_idx_map_(ort_value_name_idx_map),
-        logger_(logger) {}
+        logger_(logger) {
+  }
 
   Status CreatePlan(
 #ifdef ORT_ENABLE_STREAM
@@ -184,6 +185,10 @@ class PlannerImpl {
   InlinedHashMap<onnxruntime::NodeIndex, InlinedHashSet<onnxruntime::NodeIndex>> dependence_graph_;
   InlinedHashMap<onnxruntime::OrtValueIndex, onnxruntime::NodeIndex> value_node_map_;
 
+  // logger_ is not currently used in a minimal build
+#if defined(ORT_MINIMAL_BUILD) && !defined(ORT_EXTENDED_MINIMAL_BUILD)
+  [[maybe_unused]]
+#endif
   const logging::Logger& logger_;
 
   // OrtValueInfo: Auxiliary information about an OrtValue used only during plan-generation:
@@ -216,6 +221,7 @@ class PlannerImpl {
     FreeBufferInfo(OrtValueIndex ort_value, size_t dealloc_point)
         : ml_value(ort_value), deallocate_point(dealloc_point) {}
   };
+
   // freelist_ : a list of ml-values whose buffers are free to be reused, sorted by when
   // they became free (more recently freed earlier in the list).
   std::list<FreeBufferInfo> freelist_;
@@ -228,7 +234,8 @@ class PlannerImpl {
   }
 
   int& UseCount(OrtValueIndex n) {
-    ORT_ENFORCE(n >= 0 && static_cast<size_t>(n) < ort_value_info_.size(), "invalid value index: ", n, " against size ", ort_value_info_.size());
+    ORT_ENFORCE(n >= 0 && static_cast<size_t>(n) < ort_value_info_.size(),
+                "invalid value index: ", n, " against size ", ort_value_info_.size());
     return ort_value_info_[n].usecount;
   }
   int& UseCount(const OrtValueName& name) { return UseCount(Index(name)); }
@@ -1872,8 +1879,7 @@ class PlannerImpl {
   }
 
 #ifndef ORT_ENABLE_STREAM
-  void PartitionIntoStreams(const logging::Logger& /*logger*/,
-                            const ExecutionProviders& /*execution_providers*/,
+  void PartitionIntoStreams(const ExecutionProviders& /*execution_providers*/,
                             const PathString& /*partition_config_file*/) {
     if (graph_viewer_.NumberOfNodes() > 0) {
       stream_nodes_.push_back({});
@@ -1918,11 +1924,11 @@ class PlannerImpl {
 
 #else
 
-  void
-  PartitionIntoStreams(const ExecutionProviders& execution_providers,
-                       const PathString& partition_config_file) {
+  void PartitionIntoStreams(const ExecutionProviders& execution_providers,
+                            const PathString& partition_config_file) {
     auto partitioner = IGraphPartitioner::CreateGraphPartitioner(logger_, partition_config_file);
-    auto status = partitioner->PartitionGraph(graph_viewer_, execution_providers, stream_nodes_, context_->GetExecutionOrder());
+    auto status = partitioner->PartitionGraph(graph_viewer_, execution_providers, stream_nodes_,
+                                              context_->GetExecutionOrder());
     ORT_ENFORCE(status.IsOK(), status.ErrorMessage());
     plan_.node_stream_map_.resize(SafeInt<size_t>(graph_viewer_.MaxNodeIndex()) + 1);
     for (size_t i = 0; i < stream_nodes_.size(); ++i) {
@@ -2287,7 +2293,7 @@ Status PlannerImpl::CreatePlan(
 #endif
     const PathString& partition_config_file) {
   // 1. partition graph into streams
-  PartitionIntoStreams(execution_providers_, this->parent_node_ ? PathString{} : partition_config_file);
+  PartitionIntoStreams(execution_providers_, parent_node_ ? PathString{} : partition_config_file);
 
   // 2. initialize the plan based on stream partition result
   int num_ml_values = ort_value_name_idx_map_.MaxIdx() + 1;
