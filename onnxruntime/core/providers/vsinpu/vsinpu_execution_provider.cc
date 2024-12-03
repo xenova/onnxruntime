@@ -62,7 +62,7 @@ VSINPUExecutionProvider::~VSINPUExecutionProvider() {}
 std::vector<std::unique_ptr<ComputeCapability>>
 VSINPUExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_viewer,
                                        const IKernelLookup& /*kernel_lookup*/) const {
-  const auto& logger = GetLogger();
+  const auto& logger = *GetLogger();
   std::vector<std::unique_ptr<ComputeCapability>> result;
 
   if (graph_viewer.IsSubgraph()) {
@@ -209,7 +209,7 @@ Status ComputeStateFunc(vsi::npu::GraphEP* graph_ep,
 
 Status VSINPUExecutionProvider::Compile(const std::vector<FusedNodeAndGraph>& fused_nodes_and_graphs,
                                         std::vector<NodeComputeInfo>& node_compute_funcs) {
-  const auto& logger = GetLogger();
+  const auto& logger = *GetLogger();
 
   for (const auto& fused_node_graph : fused_nodes_and_graphs) {
     const GraphViewer& graph_viewer = fused_node_graph.filtered_graph;
