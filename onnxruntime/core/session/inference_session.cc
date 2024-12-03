@@ -2113,7 +2113,7 @@ common::Status InferenceSession::Initialize() {
     std::vector<TuningResults> tuning_results;
     bool found_tuning_results = false;
     ORT_RETURN_IF_ERROR_SESSIONID_(inference_session_utils::ParseTuningResultsFromModelMetadata(
-        model_metadata_, tuning_results, found_tuning_results));
+        model_metadata_, tuning_results, found_tuning_results, *session_logger_));
     if (found_tuning_results) {
       ORT_RETURN_IF_ERROR_SESSIONID_(SetTuningResults(tuning_results, /*error_on_invalid*/ false, /*auto_enable*/ true));
     }
