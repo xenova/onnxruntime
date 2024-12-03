@@ -85,7 +85,7 @@ NhwcTransformer::NhwcTransformer(AllocatorPtr cpu_allocator,
     const KernelCreateInfo* kernel_create_info{};
     const auto status = cpu_kernel_registry->TryFindKernel(
         kCpuExecutionProvider, qconv_uint8.op_type_, qconv_uint8.domain_,
-        qconv_uint8.version_, qconv_uint8.type_constraints_, &kernel_create_info);
+        qconv_uint8.version_, qconv_uint8.type_constraints_, logger, &kernel_create_info);
     if (status.IsOK() && kernel_create_info != nullptr) {
       kernel_create_info = nullptr;
       conv_table_.emplace(
@@ -105,7 +105,7 @@ NhwcTransformer::NhwcTransformer(AllocatorPtr cpu_allocator,
     const KernelCreateInfo* kernel_create_info{};
     const auto status = cpu_kernel_registry->TryFindKernel(
         kCpuExecutionProvider, nhwc_conv_fp16.op_type_, nhwc_conv_fp16.domain_,
-        nhwc_conv_fp16.version_, nhwc_conv_fp16.type_constraints_, &kernel_create_info);
+        nhwc_conv_fp16.version_, nhwc_conv_fp16.type_constraints_, logger, &kernel_create_info);
     if (status.IsOK() && kernel_create_info != nullptr) {
       kernel_create_info = nullptr;
       conv_table_.emplace(
@@ -125,7 +125,7 @@ NhwcTransformer::NhwcTransformer(AllocatorPtr cpu_allocator,
     const KernelCreateInfo* kernel_create_info{};
     const auto status = cpu_kernel_registry->TryFindKernel(
         kCpuExecutionProvider, nhwc_maxpool_fp16.op_type_, nhwc_maxpool_fp16.domain_,
-        nhwc_maxpool_fp16.version_, nhwc_maxpool_fp16.type_constraints_, &kernel_create_info);
+        nhwc_maxpool_fp16.version_, nhwc_maxpool_fp16.type_constraints_, logger, &kernel_create_info);
     if (status.IsOK() && kernel_create_info != nullptr) {
       kernel_create_info = nullptr;
       conv_table_.emplace(
@@ -142,7 +142,7 @@ NhwcTransformer::NhwcTransformer(AllocatorPtr cpu_allocator,
     const KernelCreateInfo* kernel_create_info{};
     const auto status = cpu_kernel_registry->TryFindKernel(
         kCpuExecutionProvider, nhwc_avgpool_fp16.op_type_, nhwc_avgpool_fp16.domain_,
-        nhwc_avgpool_fp16.version_, nhwc_avgpool_fp16.type_constraints_, &kernel_create_info);
+        nhwc_avgpool_fp16.version_, nhwc_avgpool_fp16.type_constraints_, logger, &kernel_create_info);
     if (status.IsOK() && kernel_create_info != nullptr) {
       kernel_create_info = nullptr;
       conv_table_.emplace(
@@ -159,7 +159,7 @@ NhwcTransformer::NhwcTransformer(AllocatorPtr cpu_allocator,
     const KernelCreateInfo* kernel_create_info{};
     const auto status = cpu_kernel_registry->TryFindKernel(
         kCpuExecutionProvider, nhwc_gavgpool_fp16.op_type_, nhwc_gavgpool_fp16.domain_,
-        nhwc_gavgpool_fp16.version_, nhwc_gavgpool_fp16.type_constraints_, &kernel_create_info);
+        nhwc_gavgpool_fp16.version_, nhwc_gavgpool_fp16.type_constraints_, logger, &kernel_create_info);
     if (status.IsOK() && kernel_create_info != nullptr) {
       kernel_create_info = nullptr;
       conv_table_.emplace(

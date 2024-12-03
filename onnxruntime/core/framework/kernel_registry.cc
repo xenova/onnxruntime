@@ -293,7 +293,7 @@ Status KernelRegistry::TryFindKernel(ProviderType exec_provider,
               std::ostream_iterator<std::string>(oss, "\n"));
     oss << ")";
 
-    VLOGS_DEFAULT(2) << "TryFindKernel failed, Reason: " << oss.str();
+    VLOGS(logger, 2) << "TryFindKernel failed, Reason: " << oss.str();
     return Status(common::ONNXRUNTIME, common::FAIL, oss.str());
   }
 

@@ -66,17 +66,17 @@ TEST(OptimizerTest, Basic) {
 
   auto cpu_execution_provider = std::make_unique<CPUExecutionProvider>(CPUExecutionProviderInfo());
 #if !defined(DISABLE_SPARSE_TENSORS)
-  OptimizerExecutionFrame::Info info(nodes, initialized_tensor_set,
-                                     graph.ModelPath(),
-                                     *cpu_execution_provider.get(),
-                                     [&graph](const std::string& name) -> bool {
-                                       return graph.IsSparseInitializer(name);
-                                     });
+  OptimizerExecutionFrame::Info info(
+      nodes, initialized_tensor_set, graph.ModelPath(), *cpu_execution_provider.get(),
+      [&graph](const std::string& name) -> bool {
+        return graph.IsSparseInitializer(name);
+      },
+      DefaultLoggingManager().DefaultLogger());
 #else
-  OptimizerExecutionFrame::Info info(nodes, initialized_tensor_set,
-                                     graph.ModelPath(),
-                                     *cpu_execution_provider.get(),
-                                     [](std::string const&) { return false; });
+  OptimizerExecutionFrame::Info info(
+      nodes, initialized_tensor_set, graph.ModelPath(), *cpu_execution_provider.get(),
+      [](std::string const&) { return false; },
+      DefaultLoggingManager().DefaultLogger());
 #endif  //! defined(DISABLE_SPARSE_TENSORS)
 
   std::vector<int> fetch_mlvalue_idxs{info.GetMLValueIndex("out")};

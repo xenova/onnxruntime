@@ -165,7 +165,8 @@ static Status GetCapabilityForEP(const GetCapabilityForEPParams& params, const l
   const auto kernel_registries_for_ep = kernel_registry_mgr.GetKernelRegistriesByProviderType(ep_type);
   const KernelLookup kernel_lookup{ep_type,
                                    kernel_registries_for_ep,
-                                   kernel_registry_mgr.GetKernelTypeStrResolver()};
+                                   kernel_registry_mgr.GetKernelTypeStrResolver(),
+                                   logger};
 
   auto& graph = params.graph.get();
   auto& capabilities = params.capabilities.get();
@@ -248,13 +249,15 @@ static Status GetCapabilityForEP(const GetCapabilityForEPParams& params, const l
 static Status GetCapabilityForEPForAotInlining(const GraphViewer& graph_viewer,
                                                const KernelRegistryManager& kernel_registry_mgr,
                                                const IExecutionProvider& current_ep,
+                                               const logging::Logger& logger,
                                                std::vector<std::unique_ptr<ComputeCapability>>& capabilities) {
   const auto& ep_type = current_ep.Type();
 
   const auto kernel_registries_for_ep = kernel_registry_mgr.GetKernelRegistriesByProviderType(ep_type);
   const KernelLookup kernel_lookup{ep_type,
                                    kernel_registries_for_ep,
-                                   kernel_registry_mgr.GetKernelTypeStrResolver()};
+                                   kernel_registry_mgr.GetKernelTypeStrResolver(),
+                                   logger};
 
   // TODO: Provide EP with a capability to look inside the functions.
   capabilities = get_capabilities(current_ep, graph_viewer, kernel_lookup);
@@ -426,7 +429,7 @@ static Status PartitionOnnxFormatModelImpl(Graph& graph, FuncManager& func_mgr,
     Node* n = PlaceNode(graph, *capability->sub_graph, fusion_style, type, mode, fused_node_unique_id);
     if (n != nullptr) {
       // searching in kernel registries, if no kernel registered for the fused_node, use compile approach
-      if (!KernelRegistryManager::HasImplementationOf(kernel_registry_mgr, *n, type)) {
+      if (!KernelRegistryManager::HasImplementationOf(kernel_registry_mgr, *n, type, logger)) {
         nodes_to_compile.push_back(n);
         capabilities_to_compile.push_back(std::move(capability));
       } else {
@@ -560,6 +563,7 @@ static Status InlineNodes(Graph& graph, bool& modified_graph) {
 static Status InlineFunctionsAOTImpl(const ExecutionProviders& execution_providers,
                                      const KernelRegistryManager& kernel_registry_mgr,
                                      Graph& graph,
+                                     const logging::Logger& logger,
                                      InlinedHashSet<std::string>& not_inlined,
                                      size_t& inlined_count) {
   // handle testing edge case where optimizers or constant lifting results in graph with no nodes.
@@ -575,6 +579,7 @@ static Status InlineFunctionsAOTImpl(const ExecutionProviders& execution_provide
       ORT_RETURN_IF_ERROR(InlineFunctionsAOTImpl(execution_providers,
                                                  kernel_registry_mgr,
                                                  *subgraph,
+                                                 logger,
                                                  not_inlined,
                                                  inlined_count));
     }
@@ -598,7 +603,8 @@ static Status InlineFunctionsAOTImpl(const ExecutionProviders& execution_provide
   InlinedHashSet<NodeIndex> claimed_by_ep;
   for (const auto& ep : execution_providers) {
     std::vector<std::unique_ptr<ComputeCapability>> capabilities;
-    ORT_RETURN_IF_ERROR(GetCapabilityForEPForAotInlining(graph_viewer, kernel_registry_mgr, *ep, capabilities));
+    ORT_RETURN_IF_ERROR(GetCapabilityForEPForAotInlining(graph_viewer, kernel_registry_mgr, *ep, logger,
+                                                         capabilities));
     for (auto& capability : capabilities) {
       const auto& nodes = capability->sub_graph->nodes;
       if (nodes.size() == 1) {
@@ -912,6 +918,7 @@ Status GraphPartitioner::InlineFunctionsAOT(Model& model,
     ORT_RETURN_IF_ERROR(InlineFunctionsAOTImpl(execution_providers,
                                                kernel_registry_manager,
                                                graph,
+                                               logger,
                                                not_inlined,
                                                inlined_count));
 
