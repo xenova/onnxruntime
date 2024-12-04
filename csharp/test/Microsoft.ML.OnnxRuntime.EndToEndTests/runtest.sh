@@ -42,8 +42,12 @@ if [ $RunTestCsharp = "true" ]; then
     dotnet test -p:DefineConstants=USE_TENSORRT $BUILD_SOURCESDIRECTORY/csharp/test/Microsoft.ML.OnnxRuntime.EndToEndTests/Microsoft.ML.OnnxRuntime.EndToEndTests.csproj --no-restore --verbosity detailed
   elif  [ $PACKAGENAME = "Microsoft.ML.OnnxRuntime.ROCm" ]; then
     export TESTONGPU=ON
+
     dotnet build -p:DefineConstants=USE_ROCM $BUILD_SOURCESDIRECTORY/csharp/test/Microsoft.ML.OnnxRuntime.EndToEndTests/Microsoft.ML.OnnxRuntime.EndToEndTests.csproj --no-restore --verbosity detailed
     ls -lR $BUILD_SOURCESDIRECTORY/csharp/test/Microsoft.ML.OnnxRuntime.EndToEndTests
+    ldd $BUILD_SOURCESDIRECTORY/csharp/test/Microsoft.ML.OnnxRuntime.EndToEndTests/bin/Debug/net8.0/runtimes/linux-x64/native/libonnxruntime.so
+    ldd $BUILD_SOURCESDIRECTORY/csharp/test/Microsoft.ML.OnnxRuntime.EndToEndTests/bin/Debug/net8.0/runtimes/linux-x64/native/libonnxruntime_providers_shared.so
+    ldd $BUILD_SOURCESDIRECTORY/csharp/test/Microsoft.ML.OnnxRuntime.EndToEndTests/bin/Debug/net8.0/runtimes/linux-x64/native/libonnxruntime_providers_rocm.so
     dotnet test -p:DefineConstants=USE_ROCM $BUILD_SOURCESDIRECTORY/csharp/test/Microsoft.ML.OnnxRuntime.EndToEndTests/Microsoft.ML.OnnxRuntime.EndToEndTests.csproj --no-restore --verbosity detailed
   else
     dotnet test $BUILD_SOURCESDIRECTORY/csharp/test/Microsoft.ML.OnnxRuntime.EndToEndTests/Microsoft.ML.OnnxRuntime.EndToEndTests.csproj --no-restore --verbosity detailed
