@@ -45,11 +45,7 @@ public class XunitTestRunnerWithAppium : ITestRunner
         {
             using (var appiumHelper = new AppiumHelper())
             {
-                appiumHelper.Start();
                 await runTests();
-                // this seems to close the app. not sure if there's a higher up place we could/should do that or not.
-                // the IResultChannel is still open, so we could potentially do it there. 
-                appiumHelper.Stop(); 
             }
         }
         catch (Exception ex)
