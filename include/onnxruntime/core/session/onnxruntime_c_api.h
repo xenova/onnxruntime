@@ -4904,20 +4904,26 @@ ORT_RUNTIME_CLASS(Node);
 ORT_RUNTIME_CLASS(Shape);      // Shape to enable support for dynamic shapes in the future
 ORT_RUNTIME_CLASS(ValueInfo);  // could be Tensor if we don't think we ever need to support non-tensor types
 
-// TODO: Should we prefer ownership transfer (possible double free on misuse) or require the user to manage the
+// Should we prefer ownership transfer (possible double free on misuse) or require the user to manage the
 // lifetime (possible invalidation of memory if done at the wrong time, or leak if not done)?
 // If we expect the C++ API to be the primary API, the former might be a better fit.
 // We could use _Inout_ to indicate ownership transfer, and set the input to nullptr after the call to make any
 // misuse obvious to the developer calling the API during development.
+
 struct OrtGraphApi {
   // Option A: Standalone Graph. needs interface struct to hold info with conversion to the C++ types when everything
   // is complete. can create a subgraph more directly but requires interface structs to hold all the model info with
   // copy to the C++ types at the end.
+  // This option requires more thought about ownership transfer as objects are created standalone.
 
   // Option B: Use the ORT C++ types more directly. requires the Model to be created first, and the model provides the
   // Graph instance.
   // For a subgraph we need to create a temporary Model instance to own the Graph. we can hide that internally in the
   // OrtGraph struct so there's some extra complexity but the savings is we directly build the ORT C++ types.
+  //
+  // Ownership is generally inferred as the create/get functions are creating/returning an object from the owner.
+  // Model owns Graph. Graph owns Nodes, Initializers, Input/Output value info. Nodes own attributes.
+  // Some exceptions like the OrtValue for initializers if we use existing APIs to create those.
 
   //
   // Model APIs
