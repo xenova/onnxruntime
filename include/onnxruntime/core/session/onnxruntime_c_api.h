@@ -4962,7 +4962,17 @@ struct OrtGraphApi {
   //             Use CreateTensorAsOrtValue (allocates memory) and populate the tensor with the actual data.
   //             We will copy the data when converting to TensorProto so user doesn't need to keep the data alive.
   ORT_API2_STATUS(AddInitializer, _In_ OrtGraph* graph, _In_ const char* name, _In_ OrtValue* tensor);
-  ORT_API2_STATUS(AddNode, _In_ OrtGraph* graph, _In_ OrtNode* node);
+
+  // Create attributes with CreateOpAttr.
+  // Node takes ownership of OrtOpAttr instances if provided.
+  // Technically we could have an AddNode function that creates and adds the node to the Graph class in one,
+  // but a CreateNode function makes all the APIs more consistent in their usage (create first, add second) and
+  // allows operations between the Create and Add as needed.
+  ORT_API2_STATUS(AddNode, _In_ OrtGraph* graph, _In_ const char* op_type, _In_ const char* op_name,
+                  _In_reads_(input_names_len) const char* const* input_names, size_t input_names_len,
+                  _In_reads_(output_names_len) const char* const* output_names, size_t output_names_len,
+                  _In_reads_(attribs_len) _In_opt_ const OrtOpAttr* const* attributes, _In_opt_ size_t attribs_len,
+                  _Outptr_ OrtNode** node);
 
   //
   // Shape related APIs
@@ -4972,7 +4982,6 @@ struct OrtGraphApi {
   ORT_API2_STATUS(CreateShape, _Outptr_ OrtShape** shape);
   ORT_API2_STATUS(AddDimension, _In_ OrtShape* shape, int64_t dim_value);
   ORT_API2_STATUS(AddDynamicDimension, _In_ OrtShape* shape, const char* dimension_name);
-  size_t(ORT_API_CALL* GetRank)(_In_ const OrtShape* shape);
   ORT_CLASS_RELEASE(Shape);
 
   //
@@ -4985,31 +4994,27 @@ struct OrtGraphApi {
   ORT_CLASS_RELEASE(ValueInfo);
 
   //
-  // Node APIs
-  //
-
-  // Create attributes with CreateOpAttr.
-  // Node takes ownership of OrtOpAttr instances if provided.
-  // Technically we could have an AddNode function that creates and adds the node to the Graph class in one,
-  // but a CreateNode function makes all the APIs more consistent in their usage (create first, add second) and
-  // allows operations between the Create and Add as needed.
-  ORT_API2_STATUS(CreateNode, _In_ OrtGraph* graph, _In_ const char* op_type, _In_ const char* op_name,
-                  _In_reads_(input_names_len) const char* const* input_names, size_t input_names_len,
-                  _In_reads_(output_names_len) const char* const* output_names, size_t output_names_len,
-                  _In_reads_(attribs_len) _In_opt_ const OrtOpAttr* const* attributes, _In_opt_ size_t attribs_len,
-                  _Outptr_ OrtNode** node);
-
-  //
   // Session API
   //
 
-  // Create session.
-  // Can do something similar to onnxruntime::Model::LoadFromOrtFormat to load from the Graph API OrtModel.
-  // onnxruntime::InferenceSession can call that to convert the OrtModel/OrtGraph to onnxruntime::Model and
-  // onnxruntime::Graph, and run Graph::Resolve to build the edges and validate everything.
+  // Option A:
+  // Create session from OrtModel
+  // Can do something similar to onnxruntime::Model::LoadFromOrtFormat to load from the Graph API OrtModel if using
+  // onnxruntime::InferenceSession. A 'LoadFromOrtModel' could convert the OrtModel/OrtGraph/OrtNode etc. pieces to
+  // the C++ ORT model/graph types, and run Graph::Resolve to build the edges and validate everything.
   // Following that the normal inference session initialization can run, including optimizers.
   ORT_API2_STATUS(CreateSessionFromModel, _In_ const OrtEnv* env, _In_ OrtModel* model,
                   _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out);
+
+  // Option B:
+  // We typically pass things from the session to the Model ctor like the session logger, custom op registry.
+  // It would fit the current ORT implementation better to create a session first with session options, which would
+  // add EPs, custom op registry and create session logger. We can then build the Model, and a 'Finalize' function
+  // could resolve the Model to build the Graph and validate everything followed by calling InferenceSession::Initialize
+  // to run optimizers and session state finalization.
+  // CreateModel would obviously need to change to take theh OrtSession as an input.
+  ORT_API2_STATUS(CreateSession, _In_ const OrtEnv* env, _In_ const OrtSessionOptions* options,
+                  _Outptr_ OrtSession** out);
 };
 
 /*
