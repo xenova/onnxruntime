@@ -4615,8 +4615,6 @@ struct OrtApi {
    * \param[in] num_keys
    *
    * \snippet{doc} snippets.dox OrtStatus Return Value
-   *
-   * \since Version 1.17.
    */
   ORT_API2_STATUS(SessionOptionsAppendExecutionProvider_OpenVINO_V2,
                   _In_ OrtSessionOptions* options,
@@ -4634,8 +4632,6 @@ struct OrtApi {
    * \param[in] num_keys
    *
    * \snippet{doc} snippets.dox OrtStatus Return Value
-   *
-   * \since Version 1.18.
    */
   ORT_API2_STATUS(SessionOptionsAppendExecutionProvider_VitisAI,
                   _In_ OrtSessionOptions* options,
@@ -4649,10 +4645,7 @@ struct OrtApi {
    *  \param[in] mem_info OrtMemoryInfo instance
    *  \param[in] count_or_bytes How many bytes is this scratch buffer
    *  \param[out] out A pointer to the scrach buffer
-   *
    *  \snippet{doc} snippets.dox OrtStatus Return Value
-   *
-   * \since Version 1.18.
    */
   ORT_API2_STATUS(KernelContext_GetScratchBuffer, _In_ const OrtKernelContext* context, _In_ const OrtMemoryInfo* mem_info, _In_ size_t count_or_bytes, _Outptr_ void** out);
 
@@ -4663,8 +4656,6 @@ struct OrtApi {
    * \param[out] out A pointer to OrtAllocator
    *
    * \snippet{doc} snippets.dox OrtStatus Return Value
-   *
-   * \since Version 1.18.
    */
   ORT_API2_STATUS(KernelInfoGetAllocator, _In_ const OrtKernelInfo* info, _In_ OrtMemType mem_type, _Outptr_ OrtAllocator** out);
 
@@ -4686,8 +4677,6 @@ struct OrtApi {
    * \param[in] num_external_initializer_files Number of external files
    *
    * \snippet{doc} snippets.dox OrtStatus Return Value
-   *
-   * \since Version 1.18.
    */
   ORT_API2_STATUS(AddExternalInitializersFromFilesInMemory, _In_ OrtSessionOptions* options,
                   _In_reads_(num_external_initializer_files) const ORTCHAR_T* const* external_initializer_file_names,
@@ -4710,8 +4699,6 @@ struct OrtApi {
    *                  OrtApi::ReleaseLoraAdapter.
    *
    * \snippet{doc} snippets.dox OrtStatus Return Value
-   *
-   * \since Version 1.20.
    */
   ORT_API2_STATUS(CreateLoraAdapter, const ORTCHAR_T* adapter_file_path, _In_ OrtAllocator* allocator,
                   _Outptr_ OrtLoraAdapter** out);
@@ -4730,8 +4717,6 @@ struct OrtApi {
    *                  OrtApi::ReleaseLoraAdapter.
    *
    * \snippet{doc} snippets.dox OrtStatus Return Value
-   *
-   * \since Version 1.20.
    */
   ORT_API2_STATUS(CreateLoraAdapterFromArray, _In_ const void* bytes, size_t num_bytes, _In_ OrtAllocator* allocator,
                   _Outptr_ OrtLoraAdapter** out);
@@ -4753,8 +4738,6 @@ struct OrtApi {
    * \param[in] adapter OrtLoraAdapter instance
    *
    * \snippet{doc} snippets.dox OrtStatus Return Value
-   *
-   * \since Version 1.20.
    */
   ORT_API2_STATUS(RunOptionsAddActiveLoraAdapter, _Inout_ OrtRunOptions* options, _In_ const OrtLoraAdapter* adapter);
 
@@ -4773,8 +4756,6 @@ struct OrtApi {
    * \param[in] kv_len Number of elements in the keys and values arrays
    *
    * \snippet{doc} snippets.dox OrtStatus Return Value
-   *
-   * \since Version 1.20.
    */
   ORT_API2_STATUS(SetEpDynamicOptions, _Inout_ OrtSession* sess, _In_reads_(kv_len) const char* const* keys,
                   _In_reads_(kv_len) const char* const* values, _In_ size_t kv_len);
@@ -4910,45 +4891,61 @@ ORT_RUNTIME_CLASS(ValueInfo);  // could be Tensor if we don't think we ever need
 // We could use _Inout_ to indicate ownership transfer, and set the input to nullptr after the call to make any
 // misuse obvious to the developer calling the API during development.
 struct OrtGraphApi {
-  // Option A: Standalone Graph. needs interface struct to hold info with conversion to the C++ types when everything
+  // Option A:
+  // - Allows the API usage to be more natural as it's not dictated by the current implementation of the ORT C++
+  //     classes
+  //   - Uses intermediate structs to build the model
+  //   - Converts to onnxruntime C++ classes at the end
+  //   - Less efficient to use intermediate classes
+  //
+  // General setup for the types is Create/Modify/Add or Release. Ownership transfers with Add
+
+  // Standalone Graph. needs interface struct to hold info with conversion to the C++ types when everything
   // is complete. can create a subgraph more directly but requires interface structs to hold all the model info with
   // copy to the C++ types at the end.
 
-  // Option B: Use the ORT C++ types more directly. requires the Model to be created first, and the model provides the
-  // Graph instance.
-  // For a subgraph we need to create a temporary Model instance to own the Graph. we can hide that internally in the
-  // OrtGraph struct so there's some extra complexity but the savings is we directly build the ORT C++ types.
-
   //
-  // Model APIs
+  // Shape related APIs
   //
 
-  // TODO: Should we allow ModelMetadata to be provided? We have existing APIs to read the ModelMetadata but none to
-  // create it.
-  // Default to current IR version
-  ORT_API2_STATUS(CreateModel,
-                  _In_reads_(opset_entries_len) const char* const* domain_names,
-                  _In_reads_(opset_entries_len) const size_t* const* opset_versions,
-                  size_t opset_entries_len,
-                  _Outptr_ OrtModel** model);
+  ORT_API2_STATUS(CreateFixedShape, _In_ const int64_t* dim_values, size_t dim_count, _Outptr_ OrtShape** shape);
+  ORT_API2_STATUS(CreateShape, _Outptr_ OrtShape** shape);
+  ORT_API2_STATUS(AddDimension, _In_ OrtShape* shape, int64_t dim_value);
+  ORT_API2_STATUS(AddDynamicDimension, _In_ OrtShape* shape, const char* dimension_name);
+  ORT_CLASS_RELEASE(Shape);  // call if not added to ValueInfo
 
-  // Option A: Standalone Graph. Add Graph to Model. Model takes ownership of the OrtGraph instance.
-  ORT_API2_STATUS(AddGraph, _In_ OrtModel* model, _In_ OrtGraph* graph);
-  ORT_CLASS_RELEASE(Model);
+  //
+  // ValueInfo APIs (for graph inputs/outputs)
+  //
+
+  // start with Tensor only. add helpers for other types as needed. ValueInfo takes ownership of the Shape.
+  ORT_API2_STATUS(CreateTensorValueInfo, _In_ const char* name, _In_ ONNXTensorElementDataType type,
+                  _In_ OrtShape* shape, _Outptr_ OrtValueInfo** value_info);
+  ORT_CLASS_RELEASE(ValueInfo);  // call if not added to Graph
+
+  //
+  // Node APIs
+  //
+
+  // Create attributes with CreateOpAttr.
+  // Node takes ownership of OrtOpAttr instances if provided.
+  // Technically we could have an AddNode function that creates and adds the node to the Graph class in one,
+  // but a CreateNode function makes all the APIs more consistent in their usage (Create/Modify/Add or Release) and
+  // allows operations between the Create and Add as needed.
+  ORT_API2_STATUS(CreateNode, _In_ const char* operator_name, const char* domain_name, _In_ const char* node_name,
+                  _In_reads_(input_names_len) const char* const* input_names, size_t input_names_len,
+                  _In_reads_(output_names_len) const char* const* output_names, size_t output_names_len,
+                  _In_reads_(attribs_len) _In_opt_ const OrtOpAttr* const* attributes, _In_opt_ size_t attribs_len,
+                  _Outptr_ OrtNode** node);
+  ORT_CLASS_RELEASE(Node);  // call if not added to Graph
 
   //
   // Graph APIs
   //
 
-  // Option A
   ORT_API2_STATUS(CreateGraph, _Outptr_ OrtGraph** graph);
-
-  // Option B
-  ORT_API2_STATUS(GetGraph, _In_ OrtModel* model, _Outptr_ OrtGraph** graph);
-  ORT_API2_STATUS(CreateSubGraph, _Outptr_ OrtGraph** graph);
-
-  ORT_API2_STATUS(AddInput, _In_ OrtGraph* graph, _In_ const OrtValueInfo* value_info);
-  ORT_API2_STATUS(AddOutput, _In_ OrtGraph* graph, _In_ const OrtValueInfo* value_info);
+  ORT_API2_STATUS(AddInput, _In_ OrtGraph* graph, _Inout_ OrtValueInfo** value_info);
+  ORT_API2_STATUS(AddOutput, _In_ OrtGraph* graph, _Inout_ OrtValueInfo** value_info);
 
   // 2 use cases. User is free to choose either approach but the suggested usage would be:
   //
@@ -4961,43 +4958,24 @@ struct OrtGraphApi {
   //             e.g. min/max input of Clip, indices for Gather.
   //             Use CreateTensorAsOrtValue (allocates memory) and populate the tensor with the actual data.
   //             We will copy the data when converting to TensorProto so user doesn't need to keep the data alive.
-  ORT_API2_STATUS(AddInitializer, _In_ OrtGraph* graph, _In_ const char* name, _In_ OrtValue* tensor);
-  ORT_API2_STATUS(AddNode, _In_ OrtGraph* graph, _In_ OrtNode* node);
+  ORT_API2_STATUS(AddInitializer, _In_ OrtGraph* graph, _In_ const char* name, _Inout_ OrtValue** tensor);
+  ORT_API2_STATUS(AddNode, _In_ OrtGraph* graph, _In_ OrtNode** node);
+  ORT_CLASS_RELEASE(Graph);  // call if not added to Model
 
   //
-  // Shape related APIs
+  // Model APIs
   //
 
-  ORT_API2_STATUS(CreateFixedShape, _In_ const int64_t* dim_values, size_t dim_count, _Outptr_ OrtShape** shape);
-  ORT_API2_STATUS(CreateShape, _Outptr_ OrtShape** shape);
-  ORT_API2_STATUS(AddDimension, _In_ OrtShape* shape, int64_t dim_value);
-  ORT_API2_STATUS(AddDynamicDimension, _In_ OrtShape* shape, const char* dimension_name);
-  size_t(ORT_API_CALL* GetRank)(_In_ const OrtShape* shape);
-  ORT_CLASS_RELEASE(Shape);
+  // TODO: Should we allow ModelMetadata to be provided?
+  // We have existing APIs to read the ModelMetadata but none to create it. Can add if/when needed.
+  ORT_API2_STATUS(CreateModel,
+                  _In_reads_(opset_entries_len) const char* const* domain_names,
+                  _In_reads_(opset_entries_len) const size_t* const* opset_versions,
+                  size_t opset_entries_len,
+                  _Outptr_ OrtModel** model);
 
-  //
-  // ValueInfo APIs (for graph inputs/outputs)
-  //
-
-  // start with Tensor only. add helpers for other types as needed. ValueInfo takes ownership of the Shape.
-  ORT_API2_STATUS(CreateTensorValueInfo, _In_ const char* name, _In_ ONNXTensorElementDataType type,
-                  _In_ OrtShape* shape, _Outptr_ OrtValueInfo** value_info);
-  ORT_CLASS_RELEASE(ValueInfo);
-
-  //
-  // Node APIs
-  //
-
-  // Create attributes with CreateOpAttr.
-  // Node takes ownership of OrtOpAttr instances if provided.
-  // Technically we could have an AddNode function that creates and adds the node to the Graph class in one,
-  // but a CreateNode function makes all the APIs more consistent in their usage (create first, add second) and
-  // allows operations between the Create and Add as needed.
-  ORT_API2_STATUS(CreateNode, _In_ OrtGraph* graph, _In_ const char* op_type, _In_ const char* op_name,
-                  _In_reads_(input_names_len) const char* const* input_names, size_t input_names_len,
-                  _In_reads_(output_names_len) const char* const* output_names, size_t output_names_len,
-                  _In_reads_(attribs_len) _In_opt_ const OrtOpAttr* const* attributes, _In_opt_ size_t attribs_len,
-                  _Outptr_ OrtNode** node);
+  ORT_API2_STATUS(AddGraph, _In_ OrtModel* model, _Inout_ OrtGraph** graph);
+  ORT_CLASS_RELEASE(Model);
 
   //
   // Session API
@@ -5008,7 +4986,7 @@ struct OrtGraphApi {
   // onnxruntime::InferenceSession can call that to convert the OrtModel/OrtGraph to onnxruntime::Model and
   // onnxruntime::Graph, and run Graph::Resolve to build the edges and validate everything.
   // Following that the normal inference session initialization can run, including optimizers.
-  ORT_API2_STATUS(CreateSessionFromModel, _In_ const OrtEnv* env, _In_ OrtModel* model,
+  ORT_API2_STATUS(CreateSessionFromModel, _In_ const OrtEnv* env, _Inout_ OrtModel** model,
                   _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out);
 };
 
