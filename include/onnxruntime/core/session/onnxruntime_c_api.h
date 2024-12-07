@@ -4950,7 +4950,7 @@ struct OrtGraphApi {
   // 2 use cases. User is free to choose either approach but the suggested usage would be:
   //
   // 1: Weights:
-  //             UseCreateTensorWithDataAsOrtValue to create an OrtValue with a tensor that contains a pointer to
+  //             Use CreateTensorWithDataAsOrtValue to create an OrtValue with a tensor that contains a pointer to
   //             the existing data. We can convert to a TensorProto with the existing memory tag when adding to the
   //             onnxruntime::Graph. User must keep pointer valid.
   //
