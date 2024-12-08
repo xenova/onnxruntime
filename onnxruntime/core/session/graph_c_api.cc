@@ -59,15 +59,18 @@ ORT_API(void, ReleaseShape, _Frees_ptr_opt_ OrtShape* shape) {
 }
 
 ORT_API_STATUS_IMPL(CreateTensorValueInfo, _In_ const char* name, _In_ ONNXTensorElementDataType type,
-                    _In_ OrtShape* shape, _Outptr_ OrtValueInfo** value_info) {
+                    _Inout_ OrtShape** shape, _Outptr_ OrtValueInfo** value_info) {
   API_IMPL_BEGIN
   auto vi = std::make_unique<OrtValueInfo>();
   vi->value_info_proto.set_name(name);
   auto* tensor = vi->value_info_proto.mutable_type()->mutable_tensor_type();
   tensor->set_elem_type(type);
-  *tensor->mutable_shape() = shape->shape_proto;
+  *tensor->mutable_shape() = (*shape)->shape_proto;
 
   *value_info = vi.release();
+  delete *shape;  // take ownership of the OrtShape
+  *shape = nullptr;
+
   return nullptr;
   API_IMPL_END
 }
@@ -79,7 +82,7 @@ ORT_API(void, ReleaseValueInfo, _Frees_ptr_opt_ OrtValueInfo* value_info) {
 ORT_API_STATUS_IMPL(CreateNode, const char* operator_name, const char* domain_name, _In_ const char* node_name,
                     _In_reads_(input_names_len) const char* const* input_names, size_t input_names_len,
                     _In_reads_(output_names_len) const char* const* output_names, size_t output_names_len,
-                    _In_reads_(attribs_len) _In_opt_ const OrtOpAttr* const* attributes, _In_opt_ size_t attribs_len,
+                    _In_reads_(attribs_len) _Inout_opt_ OrtOpAttr** attributes, _In_opt_ size_t attribs_len,
                     _Outptr_ OrtNode** node) {
   API_IMPL_BEGIN
   auto n = std::make_unique<OrtNode>();
@@ -101,6 +104,12 @@ ORT_API_STATUS_IMPL(CreateNode, const char* operator_name, const char* domain_na
     n->attributes.reserve(attribs_len);
     for (size_t i = 0; i < attribs_len; ++i) {
       n->attributes.push_back(*reinterpret_cast<const ONNX_NAMESPACE::AttributeProto*>(attributes[i]));
+    }
+
+    // take ownership now that we have successfully copied them all
+    for (size_t i = 0; i < attribs_len; ++i) {
+      delete attributes[i];  // as we copied into OrtNode attributes we delete
+      attributes[i] = nullptr;
     }
   }
 
@@ -165,13 +174,13 @@ ORT_API(void, ReleaseGraph, _Frees_ptr_opt_ OrtGraph* graph) {
 
 ORT_API_STATUS_IMPL(CreateModel,
                     _In_reads_(opset_entries_len) const char* const* domain_names,
-                    _In_reads_(opset_entries_len) const int* const* opset_versions,
+                    _In_reads_(opset_entries_len) const int* opset_versions,
                     size_t opset_entries_len,
                     _Outptr_ OrtModel** model) {
   API_IMPL_BEGIN
   auto m = std::make_unique<OrtModel>();
   for (size_t i = 0; i < opset_entries_len; ++i) {
-    m->domain_to_version[domain_names[i]] = *opset_versions[i];
+    m->domain_to_version[domain_names[i]] = opset_versions[i];
   }
 
   *model = m.release();
@@ -181,6 +190,12 @@ ORT_API_STATUS_IMPL(CreateModel,
 
 ORT_API_STATUS_IMPL(AddGraph, _In_ OrtModel* model, _Inout_ OrtGraph** graph) {
   API_IMPL_BEGIN
+
+  // TODO: High level validation
+  // Has inputs
+  // Has outputs
+  // Nodes are not necessarily required in a subgraph as a branch of an If may just pass through a value
+
   model->graph = std::unique_ptr<OrtGraph>(*graph);  // take ownership
   *graph = nullptr;
   return nullptr;

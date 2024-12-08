@@ -46,6 +46,9 @@ namespace ONNX_NAMESPACE {
 class ModelProto;
 }  // namespace ONNX_NAMESPACE
 
+// OrtGraphApi Model. Used to dynamically construct a model via C API at runtime.
+struct OrtModel;
+
 namespace onnxruntime {  // forward declarations
 class CustomRegistry;
 class Environment;
@@ -63,9 +66,6 @@ using OrtValueCachePtr = std::shared_ptr<OrtValueCache>;
 namespace logging {
 class LoggingManager;
 }
-
-// OrtGraphApi Model. Used to dynamically construct a model via C API at runtime.
-struct OrtModel;
 
 /**
  * Pre-defined and custom metadata about the model.
