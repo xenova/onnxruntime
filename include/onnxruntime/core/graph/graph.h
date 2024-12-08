@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <filesystem>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -10,7 +11,6 @@
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
-#include <filesystem>
 
 #include "core/common/flatbuffers.h"
 
@@ -36,6 +36,9 @@
 #include "core/graph/graph_nodes.h"
 #include "core/graph/node_arg.h"
 #include "core/graph/ort_format_load_options.h"
+
+// Type from Graph API in ORT C API so can't be in a namespace
+struct OrtGraph;
 
 namespace onnxruntime {
 class Graph;
@@ -1446,6 +1449,14 @@ class Graph {  // NOLINT(clang-analyzer-optin.performance.Padding): preserve exi
                                   const OrtFormatLoadOptions& load_options,
                                   const logging::Logger& logger, std::unique_ptr<Graph>& graph);
 
+  static Status LoadFromGraphApiModel(const OrtGraph& api_graph,
+                                      const Model& owning_model,
+                                      const std::unordered_map<std::string, int>& domain_to_version,
+                                      IOnnxRuntimeOpSchemaCollectionPtr schema_registry,
+                                      bool strict_shape_type_inference,
+                                      const logging::Logger& logger,
+                                      std::unique_ptr<Graph>& graph);
+
 #if !defined(ORT_MINIMAL_BUILD) || defined(ORT_EXTENDED_MINIMAL_BUILD)
   const RuntimeOptimizationRecordContainer& RuntimeOptimizations() const {
     return runtime_optimizations_;
@@ -1621,7 +1632,8 @@ class Graph {  // NOLINT(clang-analyzer-optin.performance.Padding): preserve exi
   // Implementation for initializer replacement
   Status ReplaceInitializedTensorImpl(ONNX_NAMESPACE::TensorProto new_initializer, bool is_external);
 
-  std::vector<NodeArg*> CreateNodeArgs(const google::protobuf::RepeatedPtrField<std::string>& names,
+  template <typename StringRange>  // range-initializer returning std::string
+  std::vector<NodeArg*> CreateNodeArgs(const StringRange& names,
                                        const ArgNameToTypeMap& name_to_type_map);
 
   void ToGraphProtoInternal(ONNX_NAMESPACE::GraphProto& graph_proto) const;
@@ -1684,6 +1696,8 @@ class Graph {  // NOLINT(clang-analyzer-optin.performance.Padding): preserve exi
                 node_index, " Max:", nodes_.size());
     return nodes_[node_index].get();
   }
+
+  Status LoadFromGraphApiModel(const OrtGraph& api_graph);
 
   const Model& owning_model_;
 

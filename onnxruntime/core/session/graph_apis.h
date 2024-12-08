@@ -1,6 +1,3 @@
-// Copyright (c) Microsoft Corporation. All rights reserved.
-// Licensed under the MIT License.
-
 namespace OrtGraphApis {
 
 // implementation that returns the API struct
@@ -32,7 +29,7 @@ ORT_API(void, ReleaseGraph, _Frees_ptr_opt_ OrtGraph* graph);
 
 ORT_API_STATUS_IMPL(CreateModel,
                     _In_reads_(opset_entries_len) const char* const* domain_names,
-                    _In_reads_(opset_entries_len) const size_t* const* opset_versions,
+                    _In_reads_(opset_entries_len) const int* const* opset_versions,
                     size_t opset_entries_len,
                     _Outptr_ OrtModel** model);
 ORT_API_STATUS_IMPL(AddGraph, _In_ OrtModel* model, _Inout_ OrtGraph** graph);
@@ -40,4 +37,5 @@ ORT_API(void, ReleaseModel, _Frees_ptr_opt_ OrtModel* model);
 
 ORT_API_STATUS_IMPL(CreateSessionFromModel, _In_ const OrtEnv* env, _Inout_ OrtModel** model,
                     _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out);
+
 }  // namespace OrtGraphApis

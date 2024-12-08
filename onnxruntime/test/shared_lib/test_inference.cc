@@ -27,7 +27,7 @@
 
 #include "onnxruntime_config.h"
 #include "providers.h"
-#include "test_allocator.h"
+#include "test/util/include/test_allocator.h"
 #include "test_fixture.h"
 #include "utils.h"
 #include "custom_op_utils.h"
@@ -61,48 +61,6 @@ template <typename T, size_t N>
 constexpr size_t countof(T (&)[N]) { return N; }
 
 extern std::unique_ptr<Ort::Env> ort_env;
-
-template <typename OutT, typename InT = float, typename InputT = Input>
-void RunSession(OrtAllocator* allocator, Ort::Session& session_object,
-                const std::vector<InputT>& inputs,
-                const char* output_name,
-                const std::vector<int64_t>& dims_y,
-                const std::vector<OutT>& values_y,
-                Ort::Value* output_tensor) {
-  std::vector<Ort::Value> ort_inputs;
-  std::vector<const char*> input_names;
-  for (size_t i = 0; i < inputs.size(); i++) {
-    input_names.emplace_back(inputs[i].name);
-    ort_inputs.emplace_back(
-        Ort::Value::CreateTensor<InT>(allocator->Info(allocator), const_cast<InT*>(inputs[i].values.data()),
-                                      inputs[i].values.size(), inputs[i].dims.data(), inputs[i].dims.size()));
-  }
-
-  std::vector<Ort::Value> ort_outputs;
-  if (output_tensor)
-    session_object.Run(Ort::RunOptions{nullptr}, input_names.data(), ort_inputs.data(), ort_inputs.size(),
-                       &output_name, output_tensor, 1);
-  else {
-    ort_outputs = session_object.Run(Ort::RunOptions{}, input_names.data(), ort_inputs.data(), ort_inputs.size(),
-                                     &output_name, 1);
-    ASSERT_EQ(ort_outputs.size(), 1u);
-    output_tensor = &ort_outputs[0];
-  }
-
-  auto type_info = output_tensor->GetTensorTypeAndShapeInfo();
-  ASSERT_EQ(type_info.GetShape(), dims_y);
-  size_t total_len = type_info.GetElementCount();
-  ASSERT_EQ(values_y.size(), total_len);
-
-  OutT* f = output_tensor->GetTensorMutableData<OutT>();
-  for (size_t i = 0; i != total_len; ++i) {
-    if constexpr (std::is_same<OutT, float>::value || std::is_same<OutT, double>::value) {
-      ASSERT_NEAR(values_y[i], f[i], 1e-3);
-    } else {
-      ASSERT_EQ(values_y[i], f[i]);
-    }
-  }
-}
 
 #ifdef USE_DML
 struct DmlObjects {
@@ -299,12 +257,12 @@ Ort::Value CreateTensorValueFromExistingD3DResource(
 
 #endif
 
-template <typename OutT, typename InT = float, typename InputT = Input>
+template <typename ModelOutputT, typename ModelInputT = float, typename InputDataT = ModelInputT>
 static void TestInference(Ort::Env& env, const std::basic_string<ORTCHAR_T>& model_uri,
-                          const std::vector<InputT>& inputs,
+                          const std::vector<InputDataT>& inputs,
                           const char* output_name,
                           const std::vector<int64_t>& expected_dims_y,
-                          const std::vector<OutT>& expected_values_y,
+                          const std::vector<ModelOutputT>& expected_values_y,
                           int provider_type,
                           OrtCustomOpDomain* custom_op_domain_ptr,
                           const ORTCHAR_T* custom_op_library_filename,
@@ -361,26 +319,26 @@ static void TestInference(Ort::Env& env, const std::basic_string<ORTCHAR_T>& mod
     auto default_allocator = std::make_unique<MockedOrtAllocator>();
 
     // without preallocated output tensor
-    RunSession<OutT, InT, InputT>(default_allocator.get(),
-                                  session,
-                                  inputs,
-                                  output_name,
-                                  expected_dims_y,
-                                  expected_values_y,
-                                  nullptr);
+    RunSession<ModelOutputT, ModelInputT, InputDataT>(default_allocator.get(),
+                                                      session,
+                                                      inputs,
+                                                      output_name,
+                                                      expected_dims_y,
+                                                      expected_values_y,
+                                                      nullptr);
     // with preallocated output tensor
-    Ort::Value value_y = Ort::Value::CreateTensor<OutT>(default_allocator.get(),
-                                                        expected_dims_y.data(), expected_dims_y.size());
+    Ort::Value value_y = Ort::Value::CreateTensor<ModelOutputT>(default_allocator.get(),
+                                                                expected_dims_y.data(), expected_dims_y.size());
 
     // test it twice
     for (int i = 0; i != 2; ++i)
-      RunSession<OutT, InT, InputT>(default_allocator.get(),
-                                    session,
-                                    inputs,
-                                    output_name,
-                                    expected_dims_y,
-                                    expected_values_y,
-                                    &value_y);
+      RunSession<ModelOutputT, ModelInputT, InputDataT>(default_allocator.get(),
+                                                        session,
+                                                        inputs,
+                                                        output_name,
+                                                        expected_dims_y,
+                                                        expected_values_y,
+                                                        &value_y);
   }
 }
 

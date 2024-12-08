@@ -64,6 +64,9 @@ namespace logging {
 class LoggingManager;
 }
 
+// OrtGraphApi Model. Used to dynamically construct a model via C API at runtime.
+struct OrtModel;
+
 /**
  * Pre-defined and custom metadata about the model.
  */
@@ -319,6 +322,14 @@ class InferenceSession {
    * @return OK if success.
    */
   [[nodiscard]] common::Status Load();
+
+  /**
+   * Load an OrtModel that was dynamically constructed via OrtGraphApi.
+   *
+   * @param graph_api_model OrtModel from OrtGraphApi
+   * @return OK if success.
+   */
+  [[nodiscard]] common::Status Load(const OrtModel& graph_api_model);
 #endif  // !defined(ORT_MINIMAL_BUILD)
 
   /**

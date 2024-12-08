@@ -4970,7 +4970,7 @@ struct OrtGraphApi {
   // We have existing APIs to read the ModelMetadata but none to create it. Can add if/when needed.
   ORT_API2_STATUS(CreateModel,
                   _In_reads_(opset_entries_len) const char* const* domain_names,
-                  _In_reads_(opset_entries_len) const size_t* const* opset_versions,
+                  _In_reads_(opset_entries_len) const int* const* opset_versions,
                   size_t opset_entries_len,
                   _Outptr_ OrtModel** model);
 

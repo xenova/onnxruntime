@@ -6,6 +6,7 @@
 #include "core/flatbuffers/schema/ort.fbs.h"
 #include "core/flatbuffers/flatbuffers_utils.h"
 #include "core/framework/tensorprotoutils.h"
+#include "core/graph/graph_api_types.h"
 #include "core/graph/model.h"
 #include "core/graph/model_load_utils.h"
 
@@ -924,6 +925,33 @@ common::Status Model::LoadFromOrtFormat(const fbs::Model& fbs_model,
   ORT_RETURN_IF_ERROR(Graph::LoadFromOrtFormat(*fbs_graph, *model, domain_to_version,
                                                load_options, logger, model->graph_));
 #endif
+  return Status::OK();
+}
+
+// static
+common::Status Model::LoadFromGraphApiModel(const OrtModel& graph_api_model,
+                                            const IOnnxRuntimeOpSchemaRegistryList* local_registries,
+                                            const ModelOptions& options,
+                                            const logging::Logger& logger,
+                                            std::unique_ptr<Model>& model) {
+  model = std::make_unique<Model>();
+  model->model_proto_.set_ir_version(ONNX_NAMESPACE::Version::IR_VERSION);
+
+  auto schema_registry = std::make_shared<SchemaRegistryManager>();
+  if (local_registries != nullptr) {
+    for (const auto& schema_collection : *local_registries) {
+      schema_registry->RegisterRegistry(schema_collection);
+    }
+  }
+
+  ORT_RETURN_IF_ERROR(Graph::LoadFromGraphApiModel(*graph_api_model.graph,
+                                                   *model,
+                                                   graph_api_model.domain_to_version,
+                                                   schema_registry,
+                                                   options.strict_shape_type_inference,
+                                                   logger,
+                                                   model->graph_));
+
   return Status::OK();
 }
 
