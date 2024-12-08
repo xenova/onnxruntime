@@ -229,6 +229,7 @@ ORT_STATUS_PTR CreateTensorImpl(MLDataType ml_type, const int64_t* shape, size_t
     oss << "not enough space: expected " << size_to_allocate << ", got " << p_data_len;
     return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, oss.str().c_str());
   }
+
   Tensor::InitOrtValue(ml_type, tensor_shape, p_data, *info, ort_value);
   return nullptr;
 }
@@ -2809,12 +2810,17 @@ static constexpr OrtApi ort_api_1_to_21 = {
     &OrtApis::KernelInfoGetAllocator,
     &OrtApis::AddExternalInitializersFromFilesInMemory,
     // End of Version 18 - DO NOT MODIFY ABOVE (see above text for more information)
+    // End of Version 19 - DO NOT MODIFY ABOVE (see above text for more information)
+
     &OrtApis::CreateLoraAdapter,
     &OrtApis::CreateLoraAdapterFromArray,
     &OrtApis::ReleaseLoraAdapter,
     &OrtApis::RunOptionsAddActiveLoraAdapter,
 
     &OrtApis::SetEpDynamicOptions,
+    // End of Version 20 - DO NOT MODIFY ABOVE (see above text for more information)
+
+    &OrtApis::GetGraphApi,
 };
 
 // OrtApiBase can never change as there is no way to know what version of OrtApiBase is returned by OrtGetApiBase.

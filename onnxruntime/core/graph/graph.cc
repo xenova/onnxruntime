@@ -20,6 +20,7 @@
 #include "core/framework/tensor_shape.h"
 #include "core/framework/tensorprotoutils.h"
 #include "core/framework/utils.h"
+#include "core/graph/graph_api_types.h"
 #include "core/graph/graph_flatbuffers_utils.h"
 #include "core/graph/graph_viewer.h"
 #include "core/graph/indexed_sub_graph.h"
@@ -48,7 +49,9 @@ namespace onnxruntime {
 #define NO_CHANGE_ON_SYNC_FLAG(...)                  \
   do {                                               \
     const bool sync_needed = GraphProtoSyncNeeded(); \
-    { __VA_ARGS__; }                                 \
+    {                                                \
+      __VA_ARGS__;                                   \
+    }                                                \
     GraphProtoSyncNeeded(sync_needed);               \
   } while (0)
 
@@ -3691,13 +3694,14 @@ void Graph::AddValueInfo(const NodeArg* new_value_info) {
   value_info_.insert(new_value_info);
 }
 
-std::vector<NodeArg*> Graph::CreateNodeArgs(const google::protobuf::RepeatedPtrField<std::string>& names,
+template <typename StringRange>
+std::vector<NodeArg*> Graph::CreateNodeArgs(const StringRange& names,
                                             const ArgNameToTypeMap& name_to_type_map) {
   const auto name_to_type_map_end = name_to_type_map.end();
   std::vector<NodeArg*> results;
   results.reserve(names.size());
 
-  for (auto& name : names) {
+  for (const std::string& name : names) {
     const TypeProto* type = nullptr;
 
     auto name_to_type_iter = name_to_type_map.find(name);
@@ -5570,6 +5574,151 @@ common::Status Graph::LoadFromOrtFormat(const onnxruntime::fbs::Graph& fbs_graph
 #endif  // !defined(ORT_MINIMAL_BUILD) || defined(ORT_EXTENDED_MINIMAL_BUILD)
 
   return Status::OK();
+}
+
+Status Graph::LoadFromGraphApiModel(const OrtGraph& api_graph) {
+  ArgNameToTypeMap name_to_type_map;
+
+  // NOTE: need to create NodeArgs as we go along
+
+  // add inputs first. the shape from an input for a non-const initializer is preferred, so we want to create the
+  // NodeArg for the value using that
+
+  auto add_value_info = [&, this](const std::vector<std::unique_ptr<OrtValueInfo>>& graph_inputs_or_outputs) {
+    for (auto& ort_value_info : graph_inputs_or_outputs) {
+      const ValueInfoProto& value_info = ort_value_info->value_info_proto;
+      // assuming input has name and type. this needs to be enforced either here or in the graph api implementation
+      ORT_ENFORCE(utils::HasName(value_info) && utils::HasType(value_info), "Graph input must have name and type.");
+
+      name_to_type_map[value_info.name()] = value_info.type();
+      ORT_IGNORE_RETURN_VALUE(GetOrCreateNodeArg(value_info.name(), &value_info.type()));
+    }
+  };
+
+  // process graph inputs first as we want the type/shape from them to be preferred if a graph input
+  // has a matching initializer
+  add_value_info(api_graph.inputs);
+
+  // add initializers
+  for (const auto& name_and_ortvalue : api_graph.initializers) {
+    // convert from OrtValue to TensorProto
+    const std::string& name = name_and_ortvalue.first;
+    const OrtValue& v = *name_and_ortvalue.second;
+
+    ORT_ENFORCE(v.IsTensor(), "Initializers must be Tensors");
+    const Tensor& t = v.Get<Tensor>();
+    TensorProto& tensor_proto = *graph_proto_->add_initializer();
+
+    tensor_proto.set_name(name);
+    tensor_proto.set_data_type(t.GetElementType());
+    for (auto dim : t.Shape().GetDims()) {
+      tensor_proto.add_dims(dim);
+    }
+
+    // we're assuming that CreateTensorWithDataAsOrtValue or CreateTensorAsOrtValue was used to create the OrtValue.
+    // based on that we're inferring whether the Tensor in the OrtValue owns the buffer.
+    // TODO: Is this robust? Do we need something more explicit?
+    const bool is_internal_data = t.OwnsBuffer();
+
+    if (is_internal_data) {
+      tensor_proto.set_raw_data(t.DataRaw(), t.SizeInBytes());
+    } else {
+      // pre-existing memory that we don't own. avoid a copy by storing the pointer in the ExternalDataInfo
+      tensor_proto.set_data_location(ONNX_NAMESPACE::TensorProto_DataLocation_EXTERNAL);
+
+      const void* data_offset = t.DataRaw();  // address of memory not offset into file
+      auto offset = narrow<ExternalDataInfo::OFFSET_TYPE>(reinterpret_cast<intptr_t>(data_offset));
+
+      ONNX_NAMESPACE::StringStringEntryProto* entry = tensor_proto.mutable_external_data()->Add();
+      entry->set_key("location");
+      // magic tag for existing memory that causes 'offset' to be treated as a pointer to the memory
+      entry->set_value(ToUTF8String(onnxruntime::utils::kTensorProtoMemoryAddressTag));
+      entry = tensor_proto.mutable_external_data()->Add();
+      entry->set_key("offset");
+      entry->set_value(std::to_string(offset));
+      entry = tensor_proto.mutable_external_data()->Add();
+      entry->set_key("length");
+      entry->set_value(std::to_string(t.SizeInBytes()));
+    }
+
+    TypeProto type_proto{TypeProtoFromTensorProto(tensor_proto)};
+    ORT_IGNORE_RETURN_VALUE(GetOrCreateNodeArg(name, &type_proto));
+
+    name_to_initial_tensor_.emplace(name, &tensor_proto);
+  }
+
+  // add graph outputs
+  add_value_info(api_graph.outputs);
+
+  // add nodes
+  for (const auto& ort_node : api_graph.nodes) {
+    const OrtNode& node = *ort_node;
+
+    // convert Constant nodes to initializers
+    if (node.operator_name == "Constant" && node.domain_name == kOnnxDomain) {
+      // graph_proto_ provides storage
+      TensorProto& tensor = *graph_proto_->add_initializer();
+
+      // create NodeProto from OrtNode so we can use the existing conversion functions
+      NodeProto node_proto;
+
+      // 'Constant' node has no inputs or attributes
+      assert(node.input_names.empty() && node.attributes.empty());
+      ORT_RETURN_IF_NOT(node.input_names.empty() && node.attributes.size() == 1 && node.output_names.size() == 1,
+                        node.node_name,
+                        " is an invalid 'Constant' node. "
+                        "Must have no inputs, one attribute and one output. ");
+
+      node_proto.add_attribute()->CopyFrom(node.attributes[0]);
+      node_proto.add_output(node.output_names[0]);
+
+      node_proto.set_op_type(node.operator_name);
+      node_proto.set_name(node.node_name);
+      node_proto.set_domain(node.domain_name);
+
+      ORT_RETURN_IF_ERROR(utils::ConstantNodeProtoToTensorProto(node_proto, /*model_path*/ "", tensor));
+      name_to_initial_tensor_.emplace(node.output_names[0], &tensor);
+
+      continue;
+    }
+
+    auto input_defs = CreateNodeArgs(node.input_names, name_to_type_map);
+    auto output_defs = CreateNodeArgs(node.output_names, name_to_type_map);
+
+    const auto num_attributes = node.attributes.size();
+
+    NodeAttributes attributes;
+    attributes.reserve(num_attributes);
+
+    for (const auto& attr : node.attributes) {
+      attributes[attr.name()] = attr;
+    }
+
+    ORT_IGNORE_RETURN_VALUE(AddNode(node.node_name, node.operator_name, /*doc_string*/ "",
+                                    input_defs, output_defs, &attributes, node.domain_name));
+  }
+
+  SetGraphResolveNeeded();
+
+  return Status::OK();
+}
+
+// static
+Status Graph::LoadFromGraphApiModel(const OrtGraph& api_graph,
+                                    const Model& owning_model,
+                                    const std::unordered_map<std::string, int>& domain_to_version,
+                                    IOnnxRuntimeOpSchemaCollectionPtr schema_registry,
+                                    bool strict_shape_type_inference,
+                                    const logging::Logger& logger,
+                                    std::unique_ptr<Graph>& graph) {
+  graph = std::make_unique<Graph>(owning_model,
+                                  domain_to_version,
+                                  schema_registry,
+                                  /*parent_graph*/ nullptr, /*parent_node*/ nullptr,
+                                  logger,
+                                  strict_shape_type_inference);
+
+  return graph->LoadFromGraphApiModel(api_graph);
 }
 
 }  // namespace onnxruntime

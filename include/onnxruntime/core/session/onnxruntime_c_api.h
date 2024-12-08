@@ -4919,8 +4919,9 @@ struct OrtGraphApi {
   //
 
   // start with Tensor only. add helpers for other types as needed. ValueInfo takes ownership of the Shape.
+  // ValueInfo takes ownership of `shape` input.
   ORT_API2_STATUS(CreateTensorValueInfo, _In_ const char* name, _In_ ONNXTensorElementDataType type,
-                  _In_ OrtShape* shape, _Outptr_ OrtValueInfo** value_info);
+                  _Inout_ OrtShape** shape, _Outptr_ OrtValueInfo** value_info);
   ORT_CLASS_RELEASE(ValueInfo);  // call if not added to Graph
 
   //
@@ -4935,7 +4936,7 @@ struct OrtGraphApi {
   ORT_API2_STATUS(CreateNode, _In_ const char* operator_name, const char* domain_name, _In_ const char* node_name,
                   _In_reads_(input_names_len) const char* const* input_names, size_t input_names_len,
                   _In_reads_(output_names_len) const char* const* output_names, size_t output_names_len,
-                  _In_reads_(attribs_len) _In_opt_ const OrtOpAttr* const* attributes, _In_opt_ size_t attribs_len,
+                  _In_reads_(attribs_len) _Inout_opt_ OrtOpAttr** attributes, _In_opt_ size_t attribs_len,
                   _Outptr_ OrtNode** node);
   ORT_CLASS_RELEASE(Node);  // call if not added to Graph
 
@@ -4970,7 +4971,7 @@ struct OrtGraphApi {
   // We have existing APIs to read the ModelMetadata but none to create it. Can add if/when needed.
   ORT_API2_STATUS(CreateModel,
                   _In_reads_(opset_entries_len) const char* const* domain_names,
-                  _In_reads_(opset_entries_len) const size_t* const* opset_versions,
+                  _In_reads_(opset_entries_len) const int* opset_versions,
                   size_t opset_entries_len,
                   _Outptr_ OrtModel** model);
 

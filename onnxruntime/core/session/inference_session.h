@@ -46,6 +46,9 @@ namespace ONNX_NAMESPACE {
 class ModelProto;
 }  // namespace ONNX_NAMESPACE
 
+// OrtGraphApi Model. Used to dynamically construct a model via C API at runtime.
+struct OrtModel;
+
 namespace onnxruntime {  // forward declarations
 class CustomRegistry;
 class Environment;
@@ -319,6 +322,14 @@ class InferenceSession {
    * @return OK if success.
    */
   [[nodiscard]] common::Status Load();
+
+  /**
+   * Load an OrtModel that was dynamically constructed via OrtGraphApi.
+   *
+   * @param graph_api_model OrtModel from OrtGraphApi
+   * @return OK if success.
+   */
+  [[nodiscard]] common::Status Load(const OrtModel& graph_api_model);
 #endif  // !defined(ORT_MINIMAL_BUILD)
 
   /**

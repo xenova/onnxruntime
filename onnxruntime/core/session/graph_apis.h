@@ -1,6 +1,3 @@
-// Copyright (c) Microsoft Corporation. All rights reserved.
-// Licensed under the MIT License.
-
 namespace OrtGraphApis {
 
 // implementation that returns the API struct
@@ -13,13 +10,13 @@ ORT_API_STATUS_IMPL(AddDynamicDimension, _In_ OrtShape* shape, const char* dimen
 ORT_API(void, ReleaseShape, _Frees_ptr_opt_ OrtShape* shape);
 
 ORT_API_STATUS_IMPL(CreateTensorValueInfo, _In_ const char* name, _In_ ONNXTensorElementDataType type,
-                    _In_ OrtShape* shape, _Outptr_ OrtValueInfo** value_info);
+                    _Inout_ OrtShape** shape, _Outptr_ OrtValueInfo** value_info);
 ORT_API(void, ReleaseValueInfo, _Frees_ptr_opt_ OrtValueInfo* value_info);
 
 ORT_API_STATUS_IMPL(CreateNode, const char* operator_name, const char* domain_name, _In_ const char* node_name,
                     _In_reads_(input_names_len) const char* const* input_names, size_t input_names_len,
                     _In_reads_(output_names_len) const char* const* output_names, size_t output_names_len,
-                    _In_reads_(attribs_len) _In_opt_ const OrtOpAttr* const* attributes, _In_opt_ size_t attribs_len,
+                    _In_reads_(attribs_len) _Inout_opt_ OrtOpAttr** attributes, _In_opt_ size_t attribs_len,
                     _Outptr_ OrtNode** node);
 ORT_API(void, ReleaseNode, _Frees_ptr_opt_ OrtNode* node);
 
@@ -32,7 +29,7 @@ ORT_API(void, ReleaseGraph, _Frees_ptr_opt_ OrtGraph* graph);
 
 ORT_API_STATUS_IMPL(CreateModel,
                     _In_reads_(opset_entries_len) const char* const* domain_names,
-                    _In_reads_(opset_entries_len) const size_t* const* opset_versions,
+                    _In_reads_(opset_entries_len) const int* opset_versions,
                     size_t opset_entries_len,
                     _Outptr_ OrtModel** model);
 ORT_API_STATUS_IMPL(AddGraph, _In_ OrtModel* model, _Inout_ OrtGraph** graph);
@@ -40,4 +37,5 @@ ORT_API(void, ReleaseModel, _Frees_ptr_opt_ OrtModel* model);
 
 ORT_API_STATUS_IMPL(CreateSessionFromModel, _In_ const OrtEnv* env, _Inout_ OrtModel** model,
                     _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out);
+
 }  // namespace OrtGraphApis

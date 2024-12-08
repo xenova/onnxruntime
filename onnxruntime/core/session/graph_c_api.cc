@@ -5,51 +5,16 @@
 
 #include "core/framework/error_code_helper.h"
 #include "core/framework/ort_value.h"
+#include "core/graph/constants.h"
+#include "core/graph/graph_api_types.h"
 #include "core/graph/onnx_protobuf.h"
 #include "core/session/graph_apis.h"
 #include "core/session/ort_apis.h"
 #include "core/session/ort_env.h"
 
-struct OrtShape {
-  ONNX_NAMESPACE::TensorShapeProto shape_proto;
-};
+using namespace onnxruntime;
 
-struct OrtValueInfo {
-  ONNX_NAMESPACE::ValueInfoProto value_info_proto;
-};
-
-struct OrtOpAttr {
-  ONNX_NAMESPACE::AttributeProto attr_proto;
-};
-
-struct OrtNode {
-  std::string operator_name;
-  std::string domain_name;
-  std::string node_name;
-
-  // OrtOpAttr is 1:1 with ONNX_NAMESPACE::AttributeProto currently.
-  // https://github.com/microsoft/onnxruntime/blob/bd5a759d0cdbed6e7f611c990d4eb5457a9ecf60/onnxruntime/core/session/standalone_op_invoker.cc#L318
-  // Might be better if it had a wrapper struct so we have more flexibility.
-  // AFAIK (TBC) that's an implementation detail so we should be able to change it.
-  std::vector<ONNX_NAMESPACE::AttributeProto> attributes;
-  std::vector<std::string> input_names;
-  std::vector<std::string> output_names;
-
-  // FUTURE if we need control flow nodes
-  // std::unordered_map<std::string, OrtGraph> subgraphs;
-};
-
-struct OrtGraph {
-  std::vector<std::unique_ptr<OrtValueInfo>> inputs;
-  std::vector<std::unique_ptr<OrtValueInfo>> outputs;
-  std::unordered_map<std::string, std::unique_ptr<OrtValue>> initializers;
-  std::vector<std::unique_ptr<OrtNode>> nodes;
-};
-
-struct OrtModel {
-  std::unique_ptr<OrtGraph> graph;
-  std::unordered_map<std::string, int64_t> domain_to_version;
-};
+namespace OrtGraphApis {
 
 ORT_API_STATUS_IMPL(CreateShape, _Outptr_ OrtShape** shape) {
   API_IMPL_BEGIN
@@ -67,7 +32,7 @@ ORT_API_STATUS_IMPL(AddDimension, _In_ OrtShape* shape, int64_t dim_value) {
 
 ORT_API_STATUS_IMPL(AddDynamicDimension, _In_ OrtShape* shape, const char* dimension_name) {
   API_IMPL_BEGIN
-  if (dimension_name == nullptr || dimension_name == '\0') {
+  if (dimension_name == nullptr || *dimension_name == '\0') {
     shape->shape_proto.add_dim();  // 'unknown'dimension exists but has neither dim_value nor dim_param
   } else {
     shape->shape_proto.add_dim()->set_dim_param(dimension_name);
@@ -94,15 +59,18 @@ ORT_API(void, ReleaseShape, _Frees_ptr_opt_ OrtShape* shape) {
 }
 
 ORT_API_STATUS_IMPL(CreateTensorValueInfo, _In_ const char* name, _In_ ONNXTensorElementDataType type,
-                    _In_ OrtShape* shape, _Outptr_ OrtValueInfo** value_info) {
+                    _Inout_ OrtShape** shape, _Outptr_ OrtValueInfo** value_info) {
   API_IMPL_BEGIN
   auto vi = std::make_unique<OrtValueInfo>();
   vi->value_info_proto.set_name(name);
   auto* tensor = vi->value_info_proto.mutable_type()->mutable_tensor_type();
   tensor->set_elem_type(type);
-  *tensor->mutable_shape() = shape->shape_proto;
+  *tensor->mutable_shape() = (*shape)->shape_proto;
 
   *value_info = vi.release();
+  delete *shape;  // take ownership of the OrtShape
+  *shape = nullptr;
+
   return nullptr;
   API_IMPL_END
 }
@@ -114,12 +82,12 @@ ORT_API(void, ReleaseValueInfo, _Frees_ptr_opt_ OrtValueInfo* value_info) {
 ORT_API_STATUS_IMPL(CreateNode, const char* operator_name, const char* domain_name, _In_ const char* node_name,
                     _In_reads_(input_names_len) const char* const* input_names, size_t input_names_len,
                     _In_reads_(output_names_len) const char* const* output_names, size_t output_names_len,
-                    _In_reads_(attribs_len) _In_opt_ const OrtOpAttr* const* attributes, _In_opt_ size_t attribs_len,
+                    _In_reads_(attribs_len) _Inout_opt_ OrtOpAttr** attributes, _In_opt_ size_t attribs_len,
                     _Outptr_ OrtNode** node) {
   API_IMPL_BEGIN
   auto n = std::make_unique<OrtNode>();
   n->operator_name = operator_name;
-  n->domain_name = domain_name;
+  n->domain_name = domain_name == kOnnxDomainAlias ? kOnnxDomain : domain_name;
   n->node_name = node_name;
 
   n->input_names.reserve(input_names_len);
@@ -136,6 +104,12 @@ ORT_API_STATUS_IMPL(CreateNode, const char* operator_name, const char* domain_na
     n->attributes.reserve(attribs_len);
     for (size_t i = 0; i < attribs_len; ++i) {
       n->attributes.push_back(*reinterpret_cast<const ONNX_NAMESPACE::AttributeProto*>(attributes[i]));
+    }
+
+    // take ownership now that we have successfully copied them all
+    for (size_t i = 0; i < attribs_len; ++i) {
+      delete attributes[i];  // as we copied into OrtNode attributes we delete
+      attributes[i] = nullptr;
     }
   }
 
@@ -200,13 +174,13 @@ ORT_API(void, ReleaseGraph, _Frees_ptr_opt_ OrtGraph* graph) {
 
 ORT_API_STATUS_IMPL(CreateModel,
                     _In_reads_(opset_entries_len) const char* const* domain_names,
-                    _In_reads_(opset_entries_len) const size_t* const* opset_versions,
+                    _In_reads_(opset_entries_len) const int* opset_versions,
                     size_t opset_entries_len,
                     _Outptr_ OrtModel** model) {
   API_IMPL_BEGIN
   auto m = std::make_unique<OrtModel>();
   for (size_t i = 0; i < opset_entries_len; ++i) {
-    m->domain_to_version[domain_names[i]] = *opset_versions[i];
+    m->domain_to_version[domain_names[i]] = opset_versions[i];
   }
 
   *model = m.release();
@@ -216,6 +190,12 @@ ORT_API_STATUS_IMPL(CreateModel,
 
 ORT_API_STATUS_IMPL(AddGraph, _In_ OrtModel* model, _Inout_ OrtGraph** graph) {
   API_IMPL_BEGIN
+
+  // TODO: High level validation
+  // Has inputs
+  // Has outputs
+  // Nodes are not necessarily required in a subgraph as a branch of an If may just pass through a value
+
   model->graph = std::unique_ptr<OrtGraph>(*graph);  // take ownership
   *graph = nullptr;
   return nullptr;
@@ -231,6 +211,8 @@ ORT_API_STATUS_IMPL(CreateSessionFromModel, _In_ const OrtEnv* /*env*/, _Inout_ 
   // TODO: Add InferenceSession ctor that takes OrtModel.
   return OrtApis::CreateStatus(ORT_NOT_IMPLEMENTED, "CreateSessionFromModel is not implemented");
 }
+
+}  // namespace OrtGraphApis
 
 static constexpr OrtGraphApi ort_graph_api = {
     // NOTE: The C# bindings depend on the API order within this struct so all additions must be at the end,
