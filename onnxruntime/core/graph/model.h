@@ -364,7 +364,7 @@ class Model {
   ModelMetaData model_metadata_;
 
   // Path to model file. May be empty.
-  const std::filesystem::path model_path_;
+  std::filesystem::path model_path_;
 
   // Main graph of the model.
   std::unique_ptr<Graph> graph_;

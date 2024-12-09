@@ -936,6 +936,9 @@ common::Status Model::LoadFromGraphApiModel(const OrtModel& graph_api_model,
                                             std::unique_ptr<Model>& model) {
   model = std::make_unique<Model>();
   model->model_proto_.set_ir_version(ONNX_NAMESPACE::Version::IR_VERSION);
+  // The optimizer Initializer class requires a path if external data is used, however in the Graph API usage the
+  // external data is pointing to pre-allocated memory and does not require a path. Set a dummy value to make it happy.
+  model->model_path_ = std::filesystem::path("_GRAPH_API_MODEL_");
 
   auto schema_registry = std::make_shared<SchemaRegistryManager>();
   if (local_registries != nullptr) {

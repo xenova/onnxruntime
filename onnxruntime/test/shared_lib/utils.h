@@ -14,11 +14,12 @@ struct Input {
 };
 
 template <typename ModelOutputT, typename ModelInputT = float, typename InputT = Input>
-void RunSession(OrtAllocator* allocator, Ort::Session& session_object,
+void RunSession(OrtAllocator* allocator,
+                Ort::Session& session_object,
                 const std::vector<InputT>& inputs,
                 const char* output_name,
-                const std::vector<int64_t>& dims_y,
-                const std::vector<ModelOutputT>& values_y,
+                const std::vector<int64_t>& output_dims,
+                const std::vector<ModelOutputT>& expected_output,
                 Ort::Value* output_tensor) {
   std::vector<Ort::Value> ort_inputs;
   std::vector<const char*> input_names;
@@ -41,16 +42,16 @@ void RunSession(OrtAllocator* allocator, Ort::Session& session_object,
   }
 
   auto type_info = output_tensor->GetTensorTypeAndShapeInfo();
-  ASSERT_EQ(type_info.GetShape(), dims_y);
+  ASSERT_EQ(type_info.GetShape(), output_dims);
   size_t total_len = type_info.GetElementCount();
-  ASSERT_EQ(values_y.size(), total_len);
+  ASSERT_EQ(expected_output.size(), total_len);
 
-  auto* f = output_tensor->GetTensorMutableData<ModelOutputT>();
+  auto* actual = output_tensor->GetTensorMutableData<ModelOutputT>();
   for (size_t i = 0; i != total_len; ++i) {
     if constexpr (std::is_same<ModelOutputT, float>::value || std::is_same<ModelOutputT, double>::value) {
-      ASSERT_NEAR(values_y[i], f[i], 1e-3);
+      EXPECT_NEAR(expected_output[i], actual[i], 1e-3) << "i=" << i;
     } else {
-      ASSERT_EQ(values_y[i], f[i]);
+      EXPECT_EQ(expected_output[i], actual[i]) << "i=" << i;
     }
   }
 }

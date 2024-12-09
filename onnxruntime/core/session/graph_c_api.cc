@@ -8,7 +8,10 @@
 #include "core/graph/constants.h"
 #include "core/graph/graph_api_types.h"
 #include "core/graph/onnx_protobuf.h"
+#include "core/session/abi_session_options_impl.h"
+#include "core/session/utils.h"
 #include "core/session/graph_apis.h"
+#include "core/session/inference_session.h"
 #include "core/session/ort_apis.h"
 #include "core/session/ort_env.h"
 
@@ -206,10 +209,34 @@ ORT_API(void, ReleaseModel, _Frees_ptr_opt_ OrtModel* model) {
   delete model;
 }
 
-ORT_API_STATUS_IMPL(CreateSessionFromModel, _In_ const OrtEnv* /*env*/, _Inout_ OrtModel** /*model*/,
-                    _In_ const OrtSessionOptions* /*options*/, _Outptr_ OrtSession** /*out*/) {
-  // TODO: Add InferenceSession ctor that takes OrtModel.
-  return OrtApis::CreateStatus(ORT_NOT_IMPLEMENTED, "CreateSessionFromModel is not implemented");
+ORT_API_STATUS_IMPL(CreateSessionFromModel, _In_ const OrtEnv* env, _In_ const OrtModel* model,
+                    _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out) {
+  API_IMPL_BEGIN
+
+  std::unique_ptr<onnxruntime::InferenceSession> sess;
+  OrtStatus* status = nullptr;
+  *out = nullptr;
+
+  ORT_TRY {
+    sess = std::make_unique<onnxruntime::InferenceSession>(
+        options == nullptr ? onnxruntime::SessionOptions() : options->value,
+        env->GetEnvironment());
+
+    ORT_API_RETURN_IF_STATUS_NOT_OK(sess->Load(*model));
+
+    ORT_API_RETURN_IF_ERROR(InitializeSession(options, sess));
+
+    *out = reinterpret_cast<OrtSession*>(sess.release());
+  }
+  ORT_CATCH(const std::exception& e) {
+    ORT_HANDLE_EXCEPTION([&]() {
+      status = OrtApis::CreateStatus(ORT_FAIL, e.what());
+    });
+  }
+
+  return status;
+
+  API_IMPL_END
 }
 
 }  // namespace OrtGraphApis

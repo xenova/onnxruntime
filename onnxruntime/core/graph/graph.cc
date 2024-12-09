@@ -5584,20 +5584,29 @@ Status Graph::LoadFromGraphApiModel(const OrtGraph& api_graph) {
   // add inputs first. the shape from an input for a non-const initializer is preferred, so we want to create the
   // NodeArg for the value using that
 
-  auto add_value_info = [&, this](const std::vector<std::unique_ptr<OrtValueInfo>>& graph_inputs_or_outputs) {
+  auto add_graph_inputs_outputs = [&, this](const std::vector<std::unique_ptr<OrtValueInfo>>& graph_inputs_or_outputs,
+                                            bool is_input) {
+    std::vector<const NodeArg*> node_args;
+    node_args.reserve(graph_inputs_or_outputs.size());
     for (auto& ort_value_info : graph_inputs_or_outputs) {
       const ValueInfoProto& value_info = ort_value_info->value_info_proto;
       // assuming input has name and type. this needs to be enforced either here or in the graph api implementation
       ORT_ENFORCE(utils::HasName(value_info) && utils::HasType(value_info), "Graph input must have name and type.");
 
       name_to_type_map[value_info.name()] = value_info.type();
-      ORT_IGNORE_RETURN_VALUE(GetOrCreateNodeArg(value_info.name(), &value_info.type()));
+      node_args.push_back(&GetOrCreateNodeArg(value_info.name(), &value_info.type()));
+    }
+
+    if (is_input) {
+      SetInputs(node_args);
+    } else {
+      SetOutputs(node_args);
     }
   };
 
   // process graph inputs first as we want the type/shape from them to be preferred if a graph input
   // has a matching initializer
-  add_value_info(api_graph.inputs);
+  add_graph_inputs_outputs(api_graph.inputs, /*input*/ true);
 
   // add initializers
   for (const auto& name_and_ortvalue : api_graph.initializers) {
@@ -5648,7 +5657,7 @@ Status Graph::LoadFromGraphApiModel(const OrtGraph& api_graph) {
   }
 
   // add graph outputs
-  add_value_info(api_graph.outputs);
+  add_graph_inputs_outputs(api_graph.outputs, /*input*/ false);
 
   // add nodes
   for (const auto& ort_node : api_graph.nodes) {
@@ -5698,9 +5707,7 @@ Status Graph::LoadFromGraphApiModel(const OrtGraph& api_graph) {
                                     input_defs, output_defs, &attributes, node.domain_name));
   }
 
-  SetGraphResolveNeeded();
-
-  return Status::OK();
+  return Resolve();
 }
 
 // static
