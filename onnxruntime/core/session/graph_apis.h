@@ -35,7 +35,7 @@ ORT_API_STATUS_IMPL(CreateModel,
 ORT_API_STATUS_IMPL(AddGraph, _In_ OrtModel* model, _Inout_ OrtGraph** graph);
 ORT_API(void, ReleaseModel, _Frees_ptr_opt_ OrtModel* model);
 
-ORT_API_STATUS_IMPL(CreateSessionFromModel, _In_ const OrtEnv* env, _Inout_ OrtModel** model,
+ORT_API_STATUS_IMPL(CreateSessionFromModel, _In_ const OrtEnv* env, _In_ const OrtModel* model,
                     _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out);
 
 }  // namespace OrtGraphApis

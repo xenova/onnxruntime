@@ -4983,11 +4983,11 @@ struct OrtGraphApi {
   //
 
   // Create session.
-  // Can do something similar to onnxruntime::Model::LoadFromOrtFormat to load from the Graph API OrtModel.
-  // onnxruntime::InferenceSession can call that to convert the OrtModel/OrtGraph to onnxruntime::Model and
-  // onnxruntime::Graph, and run Graph::Resolve to build the edges and validate everything.
-  // Following that the normal inference session initialization can run, including optimizers.
-  ORT_API2_STATUS(CreateSessionFromModel, _In_ const OrtEnv* env, _Inout_ OrtModel** model,
+  // The OrtModel does not transfer ownership to allow multiple sessions to be created.
+  // Once the session is created it can be released at any time.
+  // TBD is this re-using a model is needed. If not we could transfer ownership and automatically release the OrtModel
+  // once the session is created.
+  ORT_API2_STATUS(CreateSessionFromModel, _In_ const OrtEnv* env, _In_ const OrtModel* model,
                   _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out);
 };
 

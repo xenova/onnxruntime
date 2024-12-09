@@ -1180,6 +1180,8 @@ struct Session : detail::SessionImpl<OrtSession> {
   Session(const Env& env, const void* model_data, size_t model_data_length, const SessionOptions& options,
           OrtPrepackedWeightsContainer* prepacked_weights_container);  ///< Wraps OrtApi::CreateSessionFromArrayWithPrepackedWeightsContainer
 
+  Session(const Env& env, const OrtModel& graph_api_model, const SessionOptions& options);  ///< Wraps OrtGraphApi::CreateSessionFromModel
+
   ConstSession GetConst() const { return ConstSession{this->p_}; }
   UnownedSession GetUnowned() const { return UnownedSession{this->p_}; }
 };

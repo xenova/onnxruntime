@@ -1,47 +1,46 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-#include "core/session/onnxruntime_c_api.h"
-#include "core/session/allocator_adapters.h"
-#include "core/session/inference_session_utils.h"
-#include "core/session/IOBinding.h"
-#include "core/framework/allocator.h"
-#include "core/framework/error_code_helper.h"
-#include "core/framework/execution_provider.h"
-#include "core/framework/tensor_type_and_shape.h"
-#include "core/framework/utils.h"
 #include <cassert>
 #include <cstring>
 #include <functional>
+#include <mutex>
 #include <sstream>
 
 #include "core/common/common.h"
 #include "core/common/logging/logging.h"
 #include "core/common/narrow.h"
-#include "core/common/status.h"
 #include "core/common/safeint.h"
+#include "core/common/status.h"
+#include "core/common/string_helper.h"
+#include "core/framework/allocator.h"
+#include "core/framework/allocator.h"
+#include "core/framework/callback.h"
+#include "core/framework/data_types.h"
+#include "core/framework/error_code_helper.h"
+#include "core/framework/execution_provider.h"
+#include "core/framework/onnxruntime_typeinfo.h"
+#include "core/framework/ort_value.h"
+#include "core/framework/tensor.h"
+#include "core/framework/tensor_type_and_shape.h"
+#include "core/framework/tensorprotoutils.h"
+#include "core/framework/TensorSeq.h"
+#include "core/framework/utils.h"
 #include "core/graph/constants.h"
 #include "core/graph/graph.h"
-#include "core/framework/allocator.h"
-#include "core/framework/tensor.h"
-#include "core/framework/ort_value.h"
 #include "core/providers/get_execution_providers.h"
+#include "core/session/abi_session_options_impl.h"
+#include "core/session/allocator_adapters.h"
 #include "core/session/environment.h"
-#include "core/framework/callback.h"
-#include "core/framework/tensorprotoutils.h"
-#include "core/framework/onnxruntime_typeinfo.h"
+#include "core/session/graph_apis.h"
 #include "core/session/inference_session.h"
+#include "core/session/inference_session_utils.h"
+#include "core/session/IOBinding.h"
+#include "core/session/lora_adapters.h"
+#include "core/session/onnxruntime_c_api.h"
 #include "core/session/ort_apis.h"
 #include "core/session/ort_env.h"
-#include "core/framework/data_types.h"
-#include "abi_session_options_impl.h"
-#include "core/framework/TensorSeq.h"
-#include <mutex>
-#include "core/common/string_helper.h"
-
-#include "core/session/lora_adapters.h"
-
-#include "core/session/graph_apis.h"
+#include "core/session/utils.h"
 
 #ifdef USE_CUDA
 #include "core/providers/cuda/cuda_provider_factory.h"
@@ -229,6 +228,7 @@ ORT_STATUS_PTR CreateTensorImpl(MLDataType ml_type, const int64_t* shape, size_t
     oss << "not enough space: expected " << size_to_allocate << ", got " << p_data_len;
     return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, oss.str().c_str());
   }
+
   Tensor::InitOrtValue(ml_type, tensor_shape, p_data, *info, ort_value);
   return nullptr;
 }
@@ -738,37 +738,6 @@ static ORT_STATUS_PTR CreateSessionAndLoadModel(_In_ const OrtSessionOptions* op
 
   return nullptr;
 }
-
-static ORT_STATUS_PTR InitializeSession(_In_ const OrtSessionOptions* options,
-                                        _In_ std::unique_ptr<::onnxruntime::InferenceSession>& sess,
-                                        _Inout_opt_ OrtPrepackedWeightsContainer* prepacked_weights_container = nullptr) {
-  // we need to disable mem pattern if DML is one of the providers since DML doesn't have the concept of
-  // byte addressable memory
-  std::vector<std::unique_ptr<IExecutionProvider>> provider_list;
-  if (options) {
-    for (auto& factory : options->provider_factories) {
-      auto provider = factory->CreateProvider();
-      provider_list.push_back(std::move(provider));
-    }
-  }
-
-  // register the providers
-  for (auto& provider : provider_list) {
-    if (provider) {
-      ORT_API_RETURN_IF_STATUS_NOT_OK(sess->RegisterExecutionProvider(std::move(provider)));
-    }
-  }
-
-  if (prepacked_weights_container != nullptr) {
-    ORT_API_RETURN_IF_STATUS_NOT_OK(sess->AddPrePackedWeightsContainer(
-        reinterpret_cast<PrepackedWeightsContainer*>(prepacked_weights_container)));
-  }
-
-  ORT_API_RETURN_IF_STATUS_NOT_OK(sess->Initialize());
-
-  return nullptr;
-}
-
 }  // namespace
 
 ORT_API_STATUS_IMPL(OrtApis::CreateSession, _In_ const OrtEnv* env, _In_ const ORTCHAR_T* model_path,
@@ -1210,7 +1179,6 @@ ORT_API_STATUS_IMPL(OrtApis::GetResizedStringTensorElementBuffer, _Inout_ OrtVal
 }
 
 namespace {
-
 OrtStatusPtr GetTensorStringSpan(const ::OrtValue& v, gsl::span<const std::string>& span) {
   if (!v.IsAllocated()) {
     return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "OrtValue should contain a Tensor or a Sparse Tensor");
@@ -2114,7 +2082,6 @@ ORT_API_STATUS_IMPL(OrtApis::GetOpaqueValue, _In_ const char* domain_name, _In_ 
 }
 
 namespace {
-
 struct ProviderBuffer {
   char** buffer_;
   char* next_write_;
@@ -2421,7 +2388,6 @@ ORT_API(const OrtTrainingApi*, OrtApis::GetTrainingApi, uint32_t version) {
           version, ORT_API_VERSION);
   return nullptr;
 #else
-
   ORT_UNUSED_PARAMETER(version);
 
   return nullptr;

@@ -259,9 +259,9 @@ Ort::Value CreateTensorValueFromExistingD3DResource(
 
 #endif
 
-template <typename ModelOutputT, typename ModelInputT = float, typename InputDataT = ModelInputT>
+template <typename ModelOutputT, typename ModelInputT = float, typename InputT = Input>
 static void TestInference(Ort::Env& env, const std::basic_string<ORTCHAR_T>& model_uri,
-                          const std::vector<InputDataT>& inputs,
+                          const std::vector<InputT>& inputs,
                           const char* output_name,
                           const std::vector<int64_t>& expected_dims_y,
                           const std::vector<ModelOutputT>& expected_values_y,
@@ -321,26 +321,26 @@ static void TestInference(Ort::Env& env, const std::basic_string<ORTCHAR_T>& mod
     auto default_allocator = std::make_unique<MockedOrtAllocator>();
 
     // without preallocated output tensor
-    RunSession<ModelOutputT, ModelInputT, InputDataT>(default_allocator.get(),
-                                                      session,
-                                                      inputs,
-                                                      output_name,
-                                                      expected_dims_y,
-                                                      expected_values_y,
-                                                      nullptr);
+    RunSession<ModelOutputT, ModelInputT, InputT>(default_allocator.get(),
+                                                  session,
+                                                  inputs,
+                                                  output_name,
+                                                  expected_dims_y,
+                                                  expected_values_y,
+                                                  nullptr);
     // with preallocated output tensor
     Ort::Value value_y = Ort::Value::CreateTensor<ModelOutputT>(default_allocator.get(),
                                                                 expected_dims_y.data(), expected_dims_y.size());
 
     // test it twice
     for (int i = 0; i != 2; ++i)
-      RunSession<ModelOutputT, ModelInputT, InputDataT>(default_allocator.get(),
-                                                        session,
-                                                        inputs,
-                                                        output_name,
-                                                        expected_dims_y,
-                                                        expected_values_y,
-                                                        &value_y);
+      RunSession<ModelOutputT, ModelInputT, InputT>(default_allocator.get(),
+                                                    session,
+                                                    inputs,
+                                                    output_name,
+                                                    expected_dims_y,
+                                                    expected_values_y,
+                                                    &value_y);
   }
 }
 
