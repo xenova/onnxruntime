@@ -15,7 +15,6 @@
 #include "core/session/ort_env.h"
 
 using namespace onnxruntime;
-using Dimension = std::variant<int64_t, std::string>;
 
 struct OrtShape {
   ONNX_NAMESPACE::TensorShapeProto shape_proto;
