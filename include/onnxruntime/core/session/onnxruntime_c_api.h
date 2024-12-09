@@ -4882,26 +4882,27 @@ struct OrtCustomOp {
 ORT_RUNTIME_CLASS(Model);
 ORT_RUNTIME_CLASS(Graph);
 ORT_RUNTIME_CLASS(Node);
-ORT_RUNTIME_CLASS(Shape);      // Shape to enable support for dynamic shapes in the future
-ORT_RUNTIME_CLASS(ValueInfo);  // could be Tensor if we don't think we ever need to support non-tensor types
+ORT_RUNTIME_CLASS(Shape);
+ORT_RUNTIME_CLASS(ValueInfo);
 
 struct OrtGraphApi {
   // Option B:
-  // - Use the ORT C++ types more directly.
+  // - Use the ORT C++ types as directly as possible.
   //   - avoids cost of temporary intermedate types
   //   - forces a specific order of operation on the API to work with the underlying ORT implementation.
   //
   // Requires the Session to be created first. The C++ Model ctor requires the session logger and any custom op
   // registries to be provided by the session. The Model provides the Graph instance.
-  // Nodes are directly added to the Graph.
+  // Nodes are added to the Graph directly.
   //
-  // Ownership is generally inferred as the create/get functions are creating/returning an object from the owner.
-  // OrtSession owns OrtModel.
-  // OrtModel owns OrtGraph.
-  // OrtGraph owns OrtNode instances, Initializers, Input/Output OrtValueInfo.
-  // OrtNode own attributes.
+  // Ownership is generally inferred as the create/get/add functions are creating/returning/adding an object using the
+  // owning object.
+  //   OrtSession owns OrtModel.
+  //   OrtModel owns OrtGraph.
+  //   OrtGraph owns OrtNode instances, OrtValue initializers, and graph input/output OrtValueInfo instances.
+  //   OrtNode own OrtOpAttr attribute instances.
   //
-  // FUTURE: for a subgraph we need to create a temporary Model instance to own the Graph as we build it before
+  // FUTURE: for a subgraph we would need to create a temporary Model instance to own the Graph as we build it before
   // converting to GraphProto and adding as an attribute of the control flow Node. we can hide that internally
   // in the OrtGraph struct and have a CreateSubGraph function to handle that.
 
@@ -4920,7 +4921,7 @@ struct OrtGraphApi {
   //
 
   ORT_API2_STATUS(CreateTensorValueInfo, _In_ const char* name, _In_ ONNXTensorElementDataType type,
-                  _In_ OrtShape* shape, _Outptr_ OrtValueInfo** value_info);
+                  _Inout_ OrtShape** shape, _Outptr_ OrtValueInfo** value_info);
   ORT_CLASS_RELEASE(ValueInfo);
 
   //
@@ -4929,7 +4930,7 @@ struct OrtGraphApi {
 
   ORT_API2_STATUS(CreateSession, _In_ const OrtEnv* env, _In_ const OrtSessionOptions* options,
                   _Outptr_ OrtSession** out);
-  // resolve the Graph (validates all nodes and connections), run optimizers, etc. in InferenceSession::Initialize
+  // resolve the Graph (validates all nodes and connections), run optimizers, etc. using InferenceSession::Initialize
   ORT_API2_STATUS(FinalizeModel, _In_ const OrtSession* session);
 
   //
@@ -4939,7 +4940,7 @@ struct OrtGraphApi {
   // Create model for session.
   ORT_API2_STATUS(CreateModel, _In_ OrtSession* session,
                   _In_reads_(opset_entries_len) const char* const* domain_names,
-                  _In_reads_(opset_entries_len) const size_t* const* opset_versions,
+                  _In_reads_(opset_entries_len) const int* const* opset_versions,
                   size_t opset_entries_len,
                   _Outptr_ OrtModel** model);
 
@@ -4948,16 +4949,15 @@ struct OrtGraphApi {
   //
 
   ORT_API2_STATUS(GetGraph, _In_ OrtModel* model, _Outptr_ OrtGraph** graph);
-  // Graph takes ownership of inputs, outputs, initializes. sets the value_info/tensor param to nullptr once it does
-  ORT_API2_STATUS(AddInput, _In_ OrtGraph* graph, _Inout_ const OrtValueInfo** value_info);
-  ORT_API2_STATUS(AddOutput, _In_ OrtGraph* graph, _Inout_ const OrtValueInfo** value_info);
+  ORT_API2_STATUS(AddInput, _In_ OrtGraph* graph, _Inout_ OrtValueInfo** value_info);
+  ORT_API2_STATUS(AddOutput, _In_ OrtGraph* graph, _Inout_ OrtValueInfo** value_info);
   ORT_API2_STATUS(AddInitializer, _In_ OrtGraph* graph, _In_ const char* name, _Inout_ OrtValue** tensor);
   // Graph owns the Node so user doesn't need to release it
   ORT_API2_STATUS(AddNode, _In_ OrtGraph* graph,
                   _In_ const char* operator_name, const char* domain_name, _In_ const char* node_name,
                   _In_reads_(input_names_len) const char* const* input_names, size_t input_names_len,
                   _In_reads_(output_names_len) const char* const* output_names, size_t output_names_len,
-                  _In_reads_(attribs_len) _In_opt_ const OrtOpAttr* const* attributes, _In_opt_ size_t attribs_len,
+                  _In_reads_(attribs_len) _In_opt_ OrtOpAttr** attributes, _In_opt_ size_t attribs_len,
                   _Outptr_ OrtNode** node);
 };
 

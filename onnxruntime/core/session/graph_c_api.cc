@@ -88,13 +88,16 @@ ORT_API(void, ReleaseShape, _Frees_ptr_opt_ OrtShape* shape) {
 }
 
 ORT_API_STATUS_IMPL(CreateTensorValueInfo, _In_ const char* name, _In_ ONNXTensorElementDataType type,
-                    _In_ OrtShape* shape, _Outptr_ OrtValueInfo** value_info) {
+                    _Inout_ OrtShape** shape, _Outptr_ OrtValueInfo** value_info) {
   API_IMPL_BEGIN
   auto vi = std::make_unique<OrtValueInfo>();
   vi->value_info_proto.set_name(name);
   auto* tensor = vi->value_info_proto.mutable_type()->mutable_tensor_type();
   tensor->set_elem_type(type);
-  *tensor->mutable_shape() = shape->shape_proto;
+  *tensor->mutable_shape() = (*shape)->shape_proto;
+
+  delete *shape;  // take ownership
+  *shape = nullptr;
 
   *value_info = vi.release();
   return nullptr;
@@ -123,7 +126,7 @@ ORT_API_STATUS_IMPL(FinalizeModel, _In_ OrtSession* /*session*/) {
 
 ORT_API_STATUS_IMPL(CreateModel,
                     _In_reads_(opset_entries_len) const char* const* /*domain_names*/,
-                    _In_reads_(opset_entries_len) const size_t* const* /*opset_versions*/,
+                    _In_reads_(opset_entries_len) const int* const* /*opset_versions*/,
                     size_t /*opset_entries_len*/,
                     _Outptr_ OrtModel** model) {
   // TODO: InferenceSession needs to provide a method to construct the empty Model instance and return it.
@@ -182,8 +185,8 @@ ORT_API_STATUS_IMPL(AddInitializer, _In_ OrtGraph* graph, _In_ const char* name,
     tensor_proto.add_dims(dim);
   }
 
-  // TODO: We're inferring with CreateTensorWithDataAsOrtValue or CreateTensorAsOrtValue was used based on whether the
-  // Tensor in the OrtValue owns the buffer. TBC is that is fragile.
+  // TODO: Infer if CreateTensorWithDataAsOrtValue or CreateTensorAsOrtValue was used based on whether the
+  // Tensor in the OrtValue owns the buffer.
   const bool is_internal_data = t.OwnsBuffer();
 
   if (is_internal_data) {
@@ -210,6 +213,7 @@ ORT_API_STATUS_IMPL(AddInitializer, _In_ OrtGraph* graph, _In_ const char* name,
 
   delete *value;  // take ownership
   *value = nullptr;
+
   return nullptr;
   API_IMPL_END
 }
@@ -217,7 +221,7 @@ ORT_API_STATUS_IMPL(AddNode, _In_ OrtGraph* graph,
                     _In_ const char* operator_name, const char* domain_name, _In_ const char* node_name,
                     _In_reads_(input_names_len) const char* const* input_names, size_t input_names_len,
                     _In_reads_(output_names_len) const char* const* output_names, size_t output_names_len,
-                    _In_reads_(attribs_len) _In_opt_ const OrtOpAttr* const* attributes, _In_opt_ size_t attribs_len,
+                    _In_reads_(attribs_len) _In_opt_ OrtOpAttr** attributes, _In_opt_ size_t attribs_len,
                     _Outptr_ OrtNode** out) {
   API_IMPL_BEGIN
   std::vector<NodeArg*> inputs;
@@ -238,6 +242,9 @@ ORT_API_STATUS_IMPL(AddNode, _In_ OrtGraph* graph,
     node_attrs.reserve(attribs_len);
     for (size_t i = 0; i < attribs_len; ++i) {
       node_attrs[attributes[i]->attr_proto.name()] = attributes[i]->attr_proto;
+
+      delete attributes[i];  // take ownership
+      attributes[i] = nullptr;
     }
   }
 
