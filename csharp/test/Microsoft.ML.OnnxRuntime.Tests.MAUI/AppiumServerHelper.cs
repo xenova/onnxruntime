@@ -1,4 +1,5 @@
 ﻿using OpenQA.Selenium.Appium.Service;
+using OpenQA.Selenium.Appium.Service.Options;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -19,8 +20,15 @@ public static class AppiumServerHelper
             return;
         }
 
+        // this is needed on windows
+        var options = new OptionCollector();
+        options.AddArguments(new KeyValuePair<string, string>("--base-path", "/wd/hub"));
+        options.AddArguments(new KeyValuePair<string, string>("--log-level", "debug"));
+
         var builder = new AppiumServiceBuilder()
             .WithIPAddress(host)
+            .WithArguments(options)
+            .WithLogFile(new FileInfo(@"C:\Users\carolinezhu\Documents\cowboy-coding\appium-server-logs\server_for_ort.log"))
             .UsingPort(port);
 
         // Start the server with the builder
