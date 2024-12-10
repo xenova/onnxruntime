@@ -194,72 +194,66 @@ TEST(GraphApiTest, Basic_CxxApi) {
   // initializers that are used directly by the model. as there's no copy they must remain valid
   std::vector<std::unique_ptr<std::vector<float>>> weights;
 
-  const auto build_model = [&](GraphApi::Model& model) -> void {
-    Ort::GraphApi::Graph graph;
+  Ort::GraphApi::Graph graph;
 
-    //
-    // Create OrtModel with a Gemm. X input is 3x2, Y input is 2x3, Z output is 3x3.
-    // X is model input. Y is initializer.
-    // Set the alpha attribute of the Gemm node to 2.0 to test attribute handling.
-    //
+  //
+  // Create OrtModel with a Gemm. X input is 3x2, Y input is 2x3, Z output is 3x3.
+  // X is model input. Y is initializer.
+  // Set the alpha attribute of the Gemm node to 2.0 to test attribute handling.
+  //
 
-    // model input
-    std::vector<int64_t> input_dims({3, 2});
-    GraphApi::Shape input_shape(input_dims);
+  // model input
+  std::vector<int64_t> input_dims({3, 2});
+  GraphApi::Shape input_shape(input_dims);
 
-    auto input_info = GraphApi::ValueInfo::CreateTensorValueInfo(std::string("X"), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
-                                                                 input_shape);
+  auto input_info = GraphApi::ValueInfo::CreateTensorValueInfo(std::string("X"), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
+                                                               input_shape);
 
-    // model outputs
-    std::vector<int64_t> output_dims = {3, 3};
-    GraphApi::Shape output_shape(output_dims);
-    auto output_info = GraphApi::ValueInfo::CreateTensorValueInfo(std::string("Z"), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
-                                                                  output_shape);
+  // model outputs
+  std::vector<int64_t> output_dims = {3, 3};
+  GraphApi::Shape output_shape(output_dims);
+  auto output_info = GraphApi::ValueInfo::CreateTensorValueInfo(std::string("Z"), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
+                                                                output_shape);
 
-    graph.AddInput(input_info);
-    graph.AddOutput(output_info);
+  graph.AddInput(input_info);
+  graph.AddOutput(output_info);
 
-    //
-    // Gemm node
-    //
+  //
+  // Gemm node
+  //
 
-    std::vector<OpAttr> attributes;
-    float alpha_value = 2.0;
-    attributes.push_back(OpAttr("alpha", &alpha_value, 1, OrtOpAttrType::ORT_OP_ATTR_FLOAT));
+  std::vector<OpAttr> attributes;
+  float alpha_value = 2.0;
+  attributes.push_back(OpAttr("alpha", &alpha_value, 1, OrtOpAttrType::ORT_OP_ATTR_FLOAT));
 
-    GraphApi::Node node("Gemm", onnxruntime::kOnnxDomain, "Gemm1", {"X", "Y"}, {"Z"}, attributes);
+  GraphApi::Node node("Gemm", onnxruntime::kOnnxDomain, "Gemm1", {"X", "Y"}, {"Z"}, attributes);
 
-    graph.AddNode(node);
+  graph.AddNode(node);
 
-    // create an initializer for the Y input.
-    // add to `weights` so it remains valid for the lifetime of the session and we can avoid copying the data.
-    std::vector<int64_t> y_dims = {2, 3};
-    weights.emplace_back(std::make_unique<std::vector<float>>(std::initializer_list<float>{1.0f, 2.0f, 3.0f,
-                                                                                           4.0f, 5.0f, 6.0f}));
-    auto& y_values = *weights.back();
-    auto info = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
+  // create an initializer for the Y input.
+  // add to `weights` so it remains valid for the lifetime of the session and we can avoid copying the data.
+  std::vector<int64_t> y_dims = {2, 3};
+  weights.emplace_back(std::make_unique<std::vector<float>>(std::initializer_list<float>{1.0f, 2.0f, 3.0f,
+                                                                                         4.0f, 5.0f, 6.0f}));
+  auto& y_values = *weights.back();
+  auto info = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
 
-    // if you use this API the initializer data MUST remain valid for the lifetime of the InferenceSession
-    auto y_tensor = Value::CreateTensor(info, y_values.data(), y_values.size(), y_dims.data(), y_dims.size());
-    graph.AddInitializer("Y", y_tensor);
+  // if you use this API the initializer data MUST remain valid for the lifetime of the InferenceSession
+  auto y_tensor = Value::CreateTensor(info, y_values.data(), y_values.size(), y_dims.data(), y_dims.size());
+  graph.AddInitializer("Y", y_tensor);
 
-    std::vector<GraphApi::Model::DomainOpsetPair> opsets{{onnxruntime::kOnnxDomain, 18}};
-    model = GraphApi::Model(opsets);
-    model.AddGraph(graph);
+  std::vector<GraphApi::Model::DomainOpsetPair> opsets{{onnxruntime::kOnnxDomain, 18}};
+  GraphApi::Model model(opsets);
+  model.AddGraph(graph);
 
-    ASSERT_EQ(input_shape, nullptr) << "ValueInfo should take ownership of input_shape";
-    ASSERT_EQ(output_shape, nullptr) << "ValueInfo should take ownership of output_shape";
-    ASSERT_EQ(input_info, nullptr) << "AddInput should take ownership of input_info";
-    ASSERT_EQ(output_info, nullptr) << "AddOutput should take ownership of output_info";
-    ASSERT_EQ(attributes[0], nullptr) << "Node should take ownership of the attributes";
-    ASSERT_EQ(node, nullptr) << "AddNode should take ownership of the node";
-    ASSERT_EQ(graph, nullptr) << "AddGraph should take ownership of the graph";
-  };
-
-  GraphApi::Model model(nullptr);
-  build_model(model);
-
-  ASSERT_NE(model, nullptr) << "build_model should have created a model";
+  // validate ownership transfer
+  ASSERT_EQ(input_shape, nullptr) << "ValueInfo should take ownership of input_shape";
+  ASSERT_EQ(output_shape, nullptr) << "ValueInfo should take ownership of output_shape";
+  ASSERT_EQ(input_info, nullptr) << "AddInput should take ownership of input_info";
+  ASSERT_EQ(output_info, nullptr) << "AddOutput should take ownership of output_info";
+  ASSERT_EQ(attributes[0], nullptr) << "Node should take ownership of the attributes";
+  ASSERT_EQ(node, nullptr) << "AddNode should take ownership of the node";
+  ASSERT_EQ(graph, nullptr) << "AddGraph should take ownership of the graph";
 
   std::vector<Input> inputs(1);
   Input& input = inputs[0];
@@ -273,9 +267,3 @@ TEST(GraphApiTest, Basic_CxxApi) {
                         38.0f, 52.0f, 66.0f,
                         58.0f, 80.0f, 102.0f});
 }
-
-// dynamic shape
-
-// Constant node
-
-// multiple nodes to test shape inferencing between nodes
