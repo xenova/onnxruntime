@@ -1144,8 +1144,8 @@ inline Session::Session(const Env& env, const void* model_data, size_t model_dat
                                                                             prepacked_weights_container, &this->p_));
 }
 
-inline Session::Session(const Env& env, const OrtModel& graph_api_model, const SessionOptions& options) {
-  ThrowOnError(GetApi().GetGraphApi()->CreateSessionFromModel(env, &graph_api_model, options, &this->p_));
+inline Session::Session(const Env& env, const GraphApi::Model& model, const SessionOptions& options) {
+  ThrowOnError(GetApi().GetGraphApi()->CreateSessionFromModel(env, model.GetConst(), options, &this->p_));
 }
 
 inline AllocatedStringPtr ModelMetadata::GetProducerNameAllocated(OrtAllocator* allocator) const {
@@ -2171,4 +2171,116 @@ inline const OrtOpAttr* ShapeInferContext::GetAttrHdl(const char* attr_name) con
   return attr_hdl;
 }
 
+namespace GraphApi {
+inline std::vector<const char*> StringsToCharPtrs(const std::vector<std::string>& strings) {
+  std::vector<const char*> ptrs;
+  ptrs.reserve(strings.size());
+  std::transform(strings.begin(), strings.end(), std::back_inserter(ptrs),
+                 [](const std::string& s) { return s.c_str(); });
+
+  return ptrs;
+}
+
+inline Shape::Shape(const std::vector<int64_t>& dims) {
+  ThrowOnError(GetGraphApi().CreateFixedShape(dims.data(), dims.size(), &p_));
+}
+
+inline Shape::Shape(const std::vector<Dimension>& dims) {
+  ThrowOnError(GetGraphApi().CreateShape(&p_));
+  for (const auto& dim : dims) {
+    if (std::holds_alternative<int64_t>(dim)) {
+      ThrowOnError(GetGraphApi().AddDimension(p_, std::get<int64_t>(dim)));
+    } else {
+      ThrowOnError(GetGraphApi().AddDynamicDimension(p_, std::get<std::string>(dim).c_str()));
+    }
+  }
+}
+
+// static
+inline ValueInfo ValueInfo::CreateTensorValueInfo(const std::string& name, ONNXTensorElementDataType type,
+                                                  Shape& shape) {
+  // ValueInfo takes ownership of shape and sets shape_ptr to nullptr
+  ValueInfo vi(nullptr);
+  ThrowOnError(GetGraphApi().CreateTensorValueInfo(name.c_str(), type, shape.release_on_success(), &vi.p_));
+  return vi;
+}
+
+// static
+inline void Node::Init(const std::string& operator_name, const std::string operator_domain,
+                       const std::string& node_name,
+                       const std::vector<std::string>& input_names,
+                       const std::vector<std::string>& output_names,
+                       std::vector<OpAttr>& attributes,
+                       OrtNode*& node) {
+  auto inputs = StringsToCharPtrs(input_names);
+  auto outputs = StringsToCharPtrs(output_names);
+
+  std::vector<OrtOpAttr**> attributes_ptrs;
+  attributes_ptrs.reserve(attributes.size());
+  std::transform(attributes.begin(), attributes.end(), std::back_inserter(attributes_ptrs),
+                 [](OpAttr& attr) { return attr.release_on_success(); });
+
+  ThrowOnError(GetGraphApi().CreateNode(operator_name.c_str(), operator_domain.c_str(), node_name.c_str(),
+                                        inputs.data(), inputs.size(),
+                                        outputs.data(), outputs.size(),
+                                        attributes_ptrs.data(), attributes_ptrs.size(),
+                                        &node));
+}
+
+inline Node::Node(const std::string& operator_name, const std::string operator_domain,
+                  const std::string& node_name,
+                  const std::vector<std::string>& input_names,
+                  const std::vector<std::string>& output_names,
+                  std::vector<OpAttr>& attributes) {
+  Init(operator_name, operator_domain, node_name, input_names, output_names, attributes, p_);
+}
+
+inline Node::Node(const std::string& operator_name, const std::string operator_domain,
+                  const std::string& node_name,
+                  const std::vector<std::string>& input_names,
+                  const std::vector<std::string>& output_names) {
+  std::vector<OpAttr> empty_attributes;
+  Init(operator_name, operator_domain, node_name, input_names, output_names, empty_attributes, p_);
+}
+
+inline Graph::Graph() {
+  ThrowOnError(GetGraphApi().CreateGraph(&p_));
+}
+
+inline Model::Model(const std::vector<DomainOpsetPair>& opsets) {
+  std::vector<const char*> domains;
+  std::vector<int> versions;
+  domains.reserve(opsets.size());
+  versions.reserve(opsets.size());
+
+  for (const auto& pair : opsets) {
+    domains.push_back(pair.first.c_str());
+    versions.push_back(pair.second);
+  }
+
+  ThrowOnError(GetGraphApi().CreateModel(domains.data(), versions.data(), opsets.size(), &p_));
+}
+
+namespace detail {
+inline void GraphImpl<OrtGraph>::AddInput(ValueInfo& input) {
+  ThrowOnError(GetGraphApi().AddInput(p_, input.release_on_success()));
+}
+
+inline void GraphImpl<OrtGraph>::AddOutput(ValueInfo& output) {
+  ThrowOnError(GetGraphApi().AddOutput(p_, output.release_on_success()));
+}
+
+inline void GraphImpl<OrtGraph>::AddInitializer(const std::string& name, Value& initializer) {
+  ThrowOnError(GetGraphApi().AddInitializer(p_, name.c_str(), initializer.release_on_success()));
+}
+
+inline void GraphImpl<OrtGraph>::AddNode(Node& node) {
+  ThrowOnError(GetGraphApi().AddNode(p_, node.release_on_success()));
+}
+
+inline void ModelImpl<OrtModel>::AddGraph(Graph& graph) {
+  ThrowOnError(GetGraphApi().AddGraph(p_, graph.release_on_success()));
+}
+}  // namespace detail
+}  // namespace GraphApi
 }  // namespace Ort

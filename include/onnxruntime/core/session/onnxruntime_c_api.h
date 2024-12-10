@@ -4933,10 +4933,12 @@ struct OrtGraphApi {
   // Technically we could have an AddNode function that creates and adds the node to the Graph class in one,
   // but a CreateNode function makes all the APIs more consistent in their usage (Create/Modify/Add or Release) and
   // allows operations between the Create and Add as needed.
+  // NOTE: `attributes` is an array of OrtOpAttr**. The value pointed to by entry in the array will be set to nullptr
+  //       if ownership transfers.
   ORT_API2_STATUS(CreateNode, _In_ const char* operator_name, const char* domain_name, _In_ const char* node_name,
                   _In_reads_(input_names_len) const char* const* input_names, size_t input_names_len,
                   _In_reads_(output_names_len) const char* const* output_names, size_t output_names_len,
-                  _In_reads_(attribs_len) _Inout_opt_ OrtOpAttr** attributes, _In_opt_ size_t attribs_len,
+                  _In_reads_(attribs_len) _Inout_opt_ OrtOpAttr*** attributes, _In_opt_ size_t attribs_len,
                   _Outptr_ OrtNode** node);
   ORT_CLASS_RELEASE(Node);  // call if not added to Graph
 
