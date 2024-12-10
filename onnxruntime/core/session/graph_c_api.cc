@@ -85,7 +85,7 @@ ORT_API(void, ReleaseValueInfo, _Frees_ptr_opt_ OrtValueInfo* value_info) {
 ORT_API_STATUS_IMPL(CreateNode, const char* operator_name, const char* domain_name, _In_ const char* node_name,
                     _In_reads_(input_names_len) const char* const* input_names, size_t input_names_len,
                     _In_reads_(output_names_len) const char* const* output_names, size_t output_names_len,
-                    _In_reads_(attribs_len) _Inout_opt_ OrtOpAttr** attributes, _In_opt_ size_t attribs_len,
+                    _In_reads_(attribs_len) _Inout_opt_ OrtOpAttr*** attributes, _In_opt_ size_t attribs_len,
                     _Outptr_ OrtNode** node) {
   API_IMPL_BEGIN
   auto n = std::make_unique<OrtNode>();
@@ -106,13 +106,13 @@ ORT_API_STATUS_IMPL(CreateNode, const char* operator_name, const char* domain_na
   if (attributes != nullptr) {
     n->attributes.reserve(attribs_len);
     for (size_t i = 0; i < attribs_len; ++i) {
-      n->attributes.push_back(*reinterpret_cast<const ONNX_NAMESPACE::AttributeProto*>(attributes[i]));
+      n->attributes.push_back(*reinterpret_cast<const ONNX_NAMESPACE::AttributeProto*>(*attributes[i]));
     }
 
     // take ownership now that we have successfully copied them all
     for (size_t i = 0; i < attribs_len; ++i) {
-      delete attributes[i];  // as we copied into OrtNode attributes we delete
-      attributes[i] = nullptr;
+      delete *attributes[i];  // as we copied into OrtNode attributes we delete
+      *attributes[i] = nullptr;
     }
   }
 

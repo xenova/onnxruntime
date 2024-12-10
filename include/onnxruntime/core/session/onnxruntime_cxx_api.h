@@ -26,16 +26,17 @@
 #include "onnxruntime_c_api.h"
 #include "onnxruntime_float16.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdio>
-#include <array>
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <vector>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
-#include <type_traits>
+#include <variant>
+#include <vector>
 
 #ifdef ORT_NO_EXCEPTIONS
 #include <iostream>
@@ -120,7 +121,7 @@ const OrtApi* Global<T>::api_ = OrtGetApiBase()->GetApi(ORT_API_VERSION);
 #endif
 #endif
 
-/// This returns a reference to the OrtApi interface in use
+/// This returns a reference to the ORT C API.
 inline const OrtApi& GetApi() noexcept { return *Global<void>::api_; }
 
 /// <summary>
@@ -142,6 +143,12 @@ std::string GetBuildInfoString();
 /// </summary>
 /// <returns>vector of strings</returns>
 std::vector<std::string> GetAvailableProviders();
+
+/// <summary>
+/// This returns a reference to the ORT C Graph API. Used if building a model at runtime.
+/// </summary>
+/// <returns>ORT C GraphApi reference</returns>
+inline const OrtGraphApi& GetGraphApi() noexcept { return *GetApi().GetGraphApi(); }
 
 /** \brief IEEE 754 half-precision floating point data type
  *
@@ -526,6 +533,16 @@ ORT_DEFINE_RELEASE(KernelInfo);
 
 #undef ORT_DEFINE_RELEASE
 
+#define ORT_DEFINE_GRAPH_API_RELEASE(NAME) \
+  inline void OrtRelease(Ort##NAME* ptr) { GetGraphApi().Release##NAME(ptr); }
+
+ORT_DEFINE_GRAPH_API_RELEASE(Shape);
+ORT_DEFINE_GRAPH_API_RELEASE(ValueInfo);
+ORT_DEFINE_GRAPH_API_RELEASE(Node);
+ORT_DEFINE_GRAPH_API_RELEASE(Graph);
+ORT_DEFINE_GRAPH_API_RELEASE(Model);
+#undef ORT_DEFINE_GRAPH_API_RELEASE
+
 /** \brief This is a tagging template type. Use it with Base<T> to indicate that the C++ interface object
  *   has no ownership of the underlying C object.
  */
@@ -559,7 +576,9 @@ struct Base {
 
   constexpr Base() = default;
   constexpr explicit Base(contained_type* p) noexcept : p_{p} {}
-  ~Base() { OrtRelease(p_); }
+  ~Base() {
+    OrtRelease(p_);
+  }
 
   Base(const Base&) = delete;
   Base& operator=(const Base&) = delete;
@@ -579,6 +598,14 @@ struct Base {
     T* p = p_;
     p_ = nullptr;
     return p;
+  }
+
+  /// \brief Allows relinquishing ownership of the contained C object pointer if the API call is successful
+  /// The underlying object is not destroyed
+  // TODO: Refine this. Method name is based on usage not what it does which is ugly.
+  //       Should we use `friend` instead to allow ownership transfer when building a model at runtime?
+  contained_type** release_on_success() {
+    return &p_;
   }
 
  protected:
@@ -638,6 +665,10 @@ struct Env;
 struct TypeInfo;
 struct Value;
 struct ModelMetadata;
+
+namespace GraphApi {
+struct Model;
+}
 
 /** \brief unique_ptr typedef used to own strings allocated by OrtAllocators
  *  and release them at the end of the scope. The lifespan of the given allocator
@@ -1172,13 +1203,23 @@ using UnownedSession = detail::SessionImpl<detail::Unowned<OrtSession>>;
  *
  */
 struct Session : detail::SessionImpl<OrtSession> {
-  explicit Session(std::nullptr_t) {}                                                   ///< Create an empty Session object, must be assigned a valid one to be used
-  Session(const Env& env, const ORTCHAR_T* model_path, const SessionOptions& options);  ///< Wraps OrtApi::CreateSession
+  explicit Session(std::nullptr_t) {}  ///< Create an empty Session object, must be assigned a valid one to be used
+  /// Wraps OrtApi::CreateSession
+  Session(const Env& env, const ORTCHAR_T* model_path, const SessionOptions& options);
+
+  /// Wraps OrtApi::CreateSessionWithPrepackedWeightsContainer
   Session(const Env& env, const ORTCHAR_T* model_path, const SessionOptions& options,
-          OrtPrepackedWeightsContainer* prepacked_weights_container);                                        ///< Wraps OrtApi::CreateSessionWithPrepackedWeightsContainer
-  Session(const Env& env, const void* model_data, size_t model_data_length, const SessionOptions& options);  ///< Wraps OrtApi::CreateSessionFromArray
+          OrtPrepackedWeightsContainer* prepacked_weights_container);
+
+  /// Wraps OrtApi::CreateSessionFromArray
+  Session(const Env& env, const void* model_data, size_t model_data_length, const SessionOptions& options);
+
+  /// Wraps OrtApi::CreateSessionFromArrayWithPrepackedWeightsContainer
   Session(const Env& env, const void* model_data, size_t model_data_length, const SessionOptions& options,
-          OrtPrepackedWeightsContainer* prepacked_weights_container);  ///< Wraps OrtApi::CreateSessionFromArrayWithPrepackedWeightsContainer
+          OrtPrepackedWeightsContainer* prepacked_weights_container);
+
+  /// Wraps OrtGraphApi::CreateSessionFromModel
+  Session(const Env& env, const GraphApi::Model& model, const SessionOptions& options);
 
   Session(const Env& env, const OrtModel& graph_api_model, const SessionOptions& options);  ///< Wraps OrtGraphApi::CreateSessionFromModel
 
@@ -1703,7 +1744,8 @@ struct Value : detail::ValueImpl<OrtValue> {
    * \param shape_len The number of tensor shape dimensions.
    */
   template <typename T>
-  static Value CreateTensor(const OrtMemoryInfo* info, T* p_data, size_t p_data_element_count, const int64_t* shape, size_t shape_len);
+  static Value CreateTensor(const OrtMemoryInfo* info, T* p_data, size_t p_data_element_count,
+                            const int64_t* shape, size_t shape_len);
 
   /** \brief Creates a tensor with a user supplied buffer. Wraps OrtApi::CreateTensorWithDataAsOrtValue.
    *
@@ -1714,11 +1756,12 @@ struct Value : detail::ValueImpl<OrtValue> {
    * \param shape_len The number of tensor shape dimensions.
    * \param type The data type.
    */
-  static Value CreateTensor(const OrtMemoryInfo* info, void* p_data, size_t p_data_byte_count, const int64_t* shape, size_t shape_len,
+  static Value CreateTensor(const OrtMemoryInfo* info, void* p_data, size_t p_data_byte_count,
+                            const int64_t* shape, size_t shape_len,
                             ONNXTensorElementDataType type);
 
   /** \brief Creates an OrtValue with a tensor using a supplied OrtAllocator. Wraps OrtApi::CreateTensorAsOrtValue.
-   *         This overload will allocate the buffer for the tensor  according to the supplied shape and data type.
+   *         This overload will allocate the buffer for the tensor according to the supplied shape and data type.
    *         The allocated buffer will be owned by the returned OrtValue and will be freed when the OrtValue is released.
    *         The input data would need to be copied into the allocated buffer.
    *         This API is not suitable for strings.
@@ -2460,6 +2503,171 @@ struct CustomOpBase : OrtCustomOp {
   int start_ver_ = 1;
   int end_ver_ = MAX_CUSTOM_OP_END_VER;
 };
+
+//
+// Graph API C++ wrappers
+//
+namespace GraphApi {
+
+namespace detail {
+template <typename T>
+struct ShapeImpl : Ort::detail::Base<T> {
+  using B = Ort::detail::Base<T>;
+  using B::B;
+
+  template <typename U>
+  bool operator==(const ShapeImpl<U>& o) const;
+};
+}  // namespace detail
+
+// Const object holder that does not own the underlying object
+using ConstShape = detail::ShapeImpl<Ort::detail::Unowned<const OrtShape>>;
+
+/** \brief Wrapper around ::OrtShape
+ *
+ */
+struct Shape : detail::ShapeImpl<OrtShape> {
+  using Dimension = std::variant<int64_t, std::string>;
+  explicit Shape(std::nullptr_t) {}                        ///< No instance is created
+  explicit Shape(OrtShape* p) : ShapeImpl<OrtShape>{p} {}  ///< Take ownership of a pointer created by C Api
+  Shape(const std::vector<int64_t>& dims);                 ///< Wraps CreateFixedShape. All dims must be >= 0.
+  Shape(const std::vector<Dimension>& dims);               /// <Wraps CreateShape + AddDimension/AddDynamicDimension
+
+  ConstShape GetConst() const { return ConstShape{this->p_}; }
+};
+
+namespace detail {
+template <typename T>
+struct ValueInfoImpl : Ort::detail::Base<T> {
+  using B = Ort::detail::Base<T>;
+  using B::B;
+
+  template <typename U>
+  bool operator==(const ValueInfoImpl<U>& o) const;
+};
+}  // namespace detail
+
+// Const object holder that does not own the underlying object
+using ConstValueInfo = detail::ValueInfoImpl<Ort::detail::Unowned<const OrtValueInfo>>;
+
+/** \brief Wrapper around ::OrtValueInfo
+ *
+ */
+struct ValueInfo : detail::ValueInfoImpl<OrtValueInfo> {
+  explicit ValueInfo(std::nullptr_t) {}                                    ///< No instance is created
+  explicit ValueInfo(OrtValueInfo* p) : ValueInfoImpl<OrtValueInfo>{p} {}  ///< Take ownership of a pointer created by C Api
+
+  // Create ValueInfo for a tensor
+  static ValueInfo CreateTensorValueInfo(const std::string& name, ONNXTensorElementDataType type, Shape& shape);
+
+  ConstValueInfo GetConst() const { return ConstValueInfo{this->p_}; }
+};
+
+namespace detail {
+template <typename T>
+struct NodeImpl : Ort::detail::Base<T> {
+  using B = Ort::detail::Base<T>;
+  using B::B;
+
+  template <typename U>
+  bool operator==(const NodeImpl<U>& o) const;
+};
+}  // namespace detail
+
+// Const object holder that does not own the underlying object
+using ConstNode = detail::NodeImpl<Ort::detail::Unowned<const OrtNode>>;
+
+/** \brief Wrapper around ::OrtNode
+ *
+ */
+struct Node : detail::NodeImpl<OrtNode> {
+  explicit Node(std::nullptr_t) {}                     ///< No instance is created
+  explicit Node(OrtNode* p) : NodeImpl<OrtNode>{p} {}  ///< Take ownership of a pointer created by C Api
+
+  Node(const std::string& operator_name, const std::string operator_domain,
+       const std::string& node_name,
+       const std::vector<std::string>& input_names,
+       const std::vector<std::string>& output_names);
+
+  /// <summary>
+  /// Wraps CreateNode. Node takes ownership of attributes on success and updates the OpAttr in `attributes` to do so.
+  /// </summary>
+  Node(const std::string& operator_name, const std::string operator_domain,
+       const std::string& node_name,
+       const std::vector<std::string>& input_names,
+       const std::vector<std::string>& output_names,
+       std::vector<OpAttr>& attributes);
+
+  ConstNode GetConst() const { return ConstNode{this->p_}; }
+
+ private:
+  static void Init(const std::string& operator_name, const std::string operator_domain,
+                   const std::string& node_name,
+                   const std::vector<std::string>& input_names,
+                   const std::vector<std::string>& output_names,
+                   std::vector<OpAttr>& attributes,
+                   OrtNode*& node);
+};
+
+namespace detail {
+template <typename T>
+struct GraphImpl : Ort::detail::Base<T> {
+  using B = Ort::detail::Base<T>;
+  using B::B;
+
+  void AddInput(ValueInfo& input);
+  void AddOutput(ValueInfo& output);
+  void AddInitializer(const std::string& name, Value& initializer);  // Graph takes ownership of Value
+  void AddNode(Node& node);                                          // Graph takes ownership of Node
+
+  template <typename U>
+  bool operator==(const GraphImpl<U>& o) const;
+};
+}  // namespace detail
+
+// Const object holder that does not own the underlying object
+using ConstGraph = detail::GraphImpl<Ort::detail::Unowned<const OrtGraph>>;
+
+/** \brief Wrapper around ::OrtGraph
+ *
+ */
+struct Graph : detail::GraphImpl<OrtGraph> {
+  explicit Graph(std::nullptr_t) {}                        ///< No instance is created
+  explicit Graph(OrtGraph* p) : GraphImpl<OrtGraph>{p} {}  ///< Take ownership of a pointer created by C Api
+  Graph();
+
+  ConstGraph GetConst() const { return ConstGraph{this->p_}; }
+};
+
+namespace detail {
+template <typename T>
+struct ModelImpl : Ort::detail::Base<T> {
+  using B = Ort::detail::Base<T>;
+  using B::B;
+
+  void AddGraph(Graph& graph);
+
+  template <typename U>
+  bool operator==(const ModelImpl<U>& o) const;
+};
+}  // namespace detail
+
+// Const object holder that does not own the underlying object
+using ConstModel = detail::ModelImpl<Ort::detail::Unowned<const OrtModel>>;
+
+/** \brief Wrapper around ::OrtModel
+ *
+ */
+struct Model : detail::ModelImpl<OrtModel> {
+  using DomainOpsetPair = std::pair<std::string, int>;
+
+  explicit Model(std::nullptr_t) {}                        ///< No instance is created
+  explicit Model(OrtModel* p) : ModelImpl<OrtModel>{p} {}  ///< Take ownership of a pointer created by C Api
+  Model(const std::vector<DomainOpsetPair>& opsets);
+
+  ConstModel GetConst() const { return ConstModel{this->p_}; }
+};
+}  // namespace GraphApi
 
 }  // namespace Ort
 

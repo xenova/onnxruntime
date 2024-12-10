@@ -20,34 +20,28 @@
 
 extern std::unique_ptr<Ort::Env> ort_env;
 
+using namespace Ort;
+
 namespace {
-const OrtApi& GetOrtApi() {
-  return *Ort::Global<void>::api_;
-}
-
-const OrtGraphApi& GetGraphApi() {
-  return *Ort::Global<void>::api_->GetGraphApi();
-}
-
 template <typename ModelOutputT, typename ModelInputT = float>
 void TestInference(Ort::Env& env,
-                   OrtModel*& graph_api_model,
+                   GraphApi::Model& graph_api_model,
                    const std::vector<Input>& inputs,
                    const char* output_name,
                    const std::vector<int64_t>& expected_dims,
                    const std::vector<ModelOutputT>& expected_values,
                    Ort::SessionOptions* session_options_for_test = nullptr) {
-  const auto& graph_api = GetGraphApi();
   Ort::SessionOptions default_session_options;
   Ort::SessionOptions& session_options = session_options_for_test ? *session_options_for_test
                                                                   : default_session_options;
-  session_options.SetOptimizedModelFilePath(ORT_TSTR("graph_api_model.onnx"));
 
-  Ort::Session session(env, *graph_api_model, session_options);
+  // save model if you want to debug
+  // session_options.SetOptimizedModelFilePath(ORT_TSTR("graph_api_model.onnx"));
 
-  // Session should not require the model to stay alive.
-  graph_api.ReleaseModel(graph_api_model);
-  graph_api_model = nullptr;
+  Ort::Session session(env, graph_api_model, session_options);
+
+  // Session should not require the model to stay alive so free it now to test.
+  graph_api_model = GraphApi::Model(nullptr);
 
   auto default_allocator = std::make_unique<MockedOrtAllocator>();
 
@@ -61,11 +55,12 @@ void TestInference(Ort::Env& env,
                                         nullptr);
 }
 
+// Create OrtNode using the C API
 OrtNode* CreateNode(const OrtGraphApi& api,
                     const char* operator_name, const char* node_name,
                     const gsl::span<const char*> input_names,
                     const gsl::span<const char*> output_names,
-                    const gsl::span<OrtOpAttr*> attributes = {},
+                    const gsl::span<OrtOpAttr**> attributes = {},
                     const char* domain_name = onnxruntime::kOnnxDomain) {
   OrtNode* node = nullptr;
   Ort::ThrowOnError(api.CreateNode(operator_name, domain_name, node_name,
@@ -78,13 +73,13 @@ OrtNode* CreateNode(const OrtGraphApi& api,
 
 }  // namespace
 
-// todo: run with initializer and Constant node
-TEST(GraphApiTest, Basic) {
-  const auto& api = GetOrtApi();
-  const auto& graph_api = GetGraphApi();
+// Test the GraphApi C api
+// Uses the ORT C++ api for the rest for simplicity
+TEST(GraphApiTest, Basic_CApi) {
+  const auto& api = Ort::GetApi();
+  const auto& graph_api = Ort::GetGraphApi();
 
   // initializers that are used directly by the model. as there's no copy they must remain valid
-  //
   std::vector<std::unique_ptr<std::vector<float>>> weights;
 
   // return void so we can use ASSERT_* in the lambda
@@ -138,12 +133,10 @@ TEST(GraphApiTest, Basic) {
     // nodes
     std::vector<const char*> node_input_names = {"X", "Y"};
     std::vector<const char*> node_output_names = {"Z"};
-    std::vector<OrtOpAttr*> node_attributes = {alpha_attr};
+    std::vector<OrtOpAttr**> node_attributes = {&alpha_attr};
     OrtNode* node = CreateNode(graph_api, "Gemm", "Gemm1", node_input_names, node_output_names, node_attributes);
 
-    for (auto* attr : node_attributes) {
-      ASSERT_EQ(attr, nullptr) << "CreateNode should take ownership of the attributes";
-    }
+    ASSERT_EQ(alpha_attr, nullptr) << "CreateNode should take ownership of the attributes";
 
     Ort::ThrowOnError(graph_api.AddNode(graph, &node));
     ASSERT_EQ(node, nullptr) << "AddNode should take ownership of the node";
@@ -180,6 +173,91 @@ TEST(GraphApiTest, Basic) {
 
   OrtModel* model = nullptr;
   build_model(false, model);
+
+  ASSERT_NE(model, nullptr) << "build_model should have created a model";
+
+  std::vector<Input> inputs(1);
+  Input& input = inputs[0];
+  input.name = "X";
+  input.dims = {3, 2};
+  input.values = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+
+  std::vector<int64_t> expected_dims = {3, 3};
+  GraphApi::Model cxx_model(model);
+  TestInference<float>(*ort_env, cxx_model, inputs, "Z", expected_dims,
+                       {18.0f, 24.0f, 30.0f,
+                        38.0f, 52.0f, 66.0f,
+                        58.0f, 80.0f, 102.0f});
+}
+
+TEST(GraphApiTest, Basic_CxxApi) {
+  // initializers that are used directly by the model. as there's no copy they must remain valid
+  std::vector<std::unique_ptr<std::vector<float>>> weights;
+
+  const auto build_model = [&](GraphApi::Model& model) -> void {
+    Ort::GraphApi::Graph graph;
+
+    //
+    // Create OrtModel with a Gemm. X input is 3x2, Y input is 2x3, Z output is 3x3.
+    // X is model input. Y is initializer.
+    // Set the alpha attribute of the Gemm node to 2.0 to test attribute handling.
+    //
+
+    // model input
+    std::vector<int64_t> input_dims({3, 2});
+    GraphApi::Shape input_shape(input_dims);
+
+    auto input_info = GraphApi::ValueInfo::CreateTensorValueInfo(std::string("X"), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
+                                                                 input_shape);
+
+    // model outputs
+    std::vector<int64_t> output_dims = {3, 3};
+    GraphApi::Shape output_shape(output_dims);
+    auto output_info = GraphApi::ValueInfo::CreateTensorValueInfo(std::string("Z"), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
+                                                                  output_shape);
+
+    graph.AddInput(input_info);
+    graph.AddOutput(output_info);
+
+    //
+    // Gemm node
+    //
+
+    std::vector<OpAttr> attributes;
+    float alpha_value = 2.0;
+    attributes.push_back(OpAttr("alpha", &alpha_value, 1, OrtOpAttrType::ORT_OP_ATTR_FLOAT));
+
+    GraphApi::Node node("Gemm", onnxruntime::kOnnxDomain, "Gemm1", {"X", "Y"}, {"Z"}, attributes);
+
+    graph.AddNode(node);
+
+    // create an initializer for the Y input.
+    // add to `weights` so it remains valid for the lifetime of the session and we can avoid copying the data.
+    std::vector<int64_t> y_dims = {2, 3};
+    weights.emplace_back(std::make_unique<std::vector<float>>(std::initializer_list<float>{1.0f, 2.0f, 3.0f,
+                                                                                           4.0f, 5.0f, 6.0f}));
+    auto& y_values = *weights.back();
+    auto info = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
+
+    // if you use this API the initializer data MUST remain valid for the lifetime of the InferenceSession
+    auto y_tensor = Value::CreateTensor(info, y_values.data(), y_values.size(), y_dims.data(), y_dims.size());
+    graph.AddInitializer("Y", y_tensor);
+
+    std::vector<GraphApi::Model::DomainOpsetPair> opsets{{onnxruntime::kOnnxDomain, 18}};
+    model = GraphApi::Model(opsets);
+    model.AddGraph(graph);
+
+    ASSERT_EQ(input_shape, nullptr) << "ValueInfo should take ownership of input_shape";
+    ASSERT_EQ(output_shape, nullptr) << "ValueInfo should take ownership of output_shape";
+    ASSERT_EQ(input_info, nullptr) << "AddInput should take ownership of input_info";
+    ASSERT_EQ(output_info, nullptr) << "AddOutput should take ownership of output_info";
+    ASSERT_EQ(attributes[0], nullptr) << "Node should take ownership of the attributes";
+    ASSERT_EQ(node, nullptr) << "AddNode should take ownership of the node";
+    ASSERT_EQ(graph, nullptr) << "AddGraph should take ownership of the graph";
+  };
+
+  GraphApi::Model model(nullptr);
+  build_model(model);
 
   ASSERT_NE(model, nullptr) << "build_model should have created a model";
 
