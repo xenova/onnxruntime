@@ -91,7 +91,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Appium.WebDriver" Version="6.0.0" />
         <PackageReference Include="DeviceRunners.VisualRunners.Maui" Version="0.1.0-preview.2" />
         <PackageReference Include="DeviceRunners.VisualRunners.Xunit" Version="0.1.0-preview.2" />
         <PackageReference Include="DeviceRunners.XHarness.Maui" Version="0.1.0-preview.2" />
@@ -103,39 +102,11 @@
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
         <PackageReference Include="xunit" Version="2.9.0" />
         <PackageReference Include="xunit.runner.utility" Version="2.9.0" />
-        <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
-          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-          <PrivateAssets>all</PrivateAssets>
-        </PackageReference>
     </ItemGroup>
 
 	<ItemGroup Condition="$(IsIOSTarget)=='true' OR $(IsMacCatalystTarget)=='true'">
 		<!-- need the dummy ORT Extensions package to resolve the RegisterCustomOps symbol. -->
 		<PackageReference Include="Microsoft.ML.OnnxRuntime.Extensions.Dummy" Version="0.12.0" />
-	</ItemGroup>
-
-	<!-- Android -->
-	<ItemGroup Condition="'$(IsAndroidTarget)' != 'true'">
-		<Compile Remove="**\Android\**\*.cs" />
-		<None Include="**\Android\**\*.cs" Exclude="$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder)" />
-	</ItemGroup>
-
-	<!-- iOS -->
-	<ItemGroup Condition="'$(IsIOSTarget)' != 'true'">
-		<Compile Remove="**\iOS\**\*.cs" />
-		<None Include="**\iOS\**\*.cs" Exclude="$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder)" />
-	</ItemGroup>
-
-	<!-- Mac Catalyst -->
-	<ItemGroup Condition="'$(IsMacCatalystTarget)' != 'true'">
-		<Compile Remove="**\MacCatalyst\**\*.cs" />
-		<None Include="**\MacCatalyst\**\*.cs" Exclude="$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder)" />
-	</ItemGroup>
-
-	<!-- Windows -->
-	<ItemGroup Condition="'$(IsWindowsTarget)' != 'true'">
-		<Compile Remove="**\Windows\**\*.cs" />
-		<None Include="**\Windows\**\*.cs" Exclude="$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder)" />
 	</ItemGroup>
 
     <Target Name="RemoveVisualStudioTestRunner" BeforeTargets="_ComputeAppxPackagePayload">
@@ -150,5 +121,6 @@
 	</PropertyGroup>-->
 	<PropertyGroup>
 		<GenerateProgramFile>false</GenerateProgramFile>
+		<DefaultLanguage>en</DefaultLanguage>
 	</PropertyGroup>
 </Project>

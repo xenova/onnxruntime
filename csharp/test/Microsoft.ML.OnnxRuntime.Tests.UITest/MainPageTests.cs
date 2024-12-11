@@ -8,7 +8,7 @@ using OpenQA.Selenium.Appium.Interfaces;
 using OpenQA.Selenium.Appium.Windows;
 using Xunit;
 
-namespace Microsoft.ML.OnnxRuntime.Tests.MAUI;
+namespace Microsoft.ML.OnnxRuntime.Tests.MAUI.UITest;
 // Add a CollectionDefinition together with a ICollectionFixture
 // to ensure that setting up the Appium server only runs once
 // xUnit does not have a built-in concept of a fixture that only runs once for the whole test set.

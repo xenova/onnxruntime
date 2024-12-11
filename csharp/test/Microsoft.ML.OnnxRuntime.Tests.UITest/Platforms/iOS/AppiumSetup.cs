@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using OpenQA.Selenium.Appium;
 using OpenQA.Selenium.Appium.iOS;
 
-namespace Microsoft.ML.OnnxRuntime.Tests.MAUI;
+namespace Microsoft.ML.OnnxRuntime.Tests.MAUI.UITest;
 public partial class AppiumSetup
 {
     private static AppiumDriver? driver;

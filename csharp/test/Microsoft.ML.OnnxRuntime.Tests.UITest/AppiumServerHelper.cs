@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Microsoft.ML.OnnxRuntime.Tests;
+namespace Microsoft.ML.OnnxRuntime.Tests.MAUI.UITest;
 public static class AppiumServerHelper
 {
     private static AppiumLocalService? _appiumLocalService;
@@ -28,7 +28,7 @@ public static class AppiumServerHelper
         var builder = new AppiumServiceBuilder()
             .WithIPAddress(host)
             .WithArguments(options)
-            .WithLogFile(new FileInfo(@"C:\Users\carolinezhu\Documents\cowboy-coding\appium-server-logs\server_for_ort.log"))
+            .WithLogFile(new FileInfo(@"C:\Users\carolinezhu\Documents\cowboy-coding\appium-server-logs\server_for_ort_separate_proj.log"))
             .UsingPort(port);
 
         // Start the server with the builder
