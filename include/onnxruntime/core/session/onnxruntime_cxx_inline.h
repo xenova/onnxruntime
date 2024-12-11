@@ -2206,7 +2206,7 @@ inline ValueInfo ValueInfo::CreateTensorValueInfo(const std::string& name, ONNXT
 }
 
 // static
-inline void Node::Init(const std::string& operator_name, const std::string operator_domain,
+inline void Node::Init(const std::string& operator_name, const std::string& operator_domain,
                        const std::string& node_name,
                        const std::vector<std::string>& input_names,
                        const std::vector<std::string>& output_names,
@@ -2228,7 +2228,7 @@ inline void Node::Init(const std::string& operator_name, const std::string opera
                                         &node));
 }
 
-inline Node::Node(const std::string& operator_name, const std::string operator_domain,
+inline Node::Node(const std::string& operator_name, const std::string& operator_domain,
                   const std::string& node_name,
                   const std::vector<std::string>& input_names,
                   const std::vector<std::string>& output_names,
@@ -2236,7 +2236,7 @@ inline Node::Node(const std::string& operator_name, const std::string operator_d
   Init(operator_name, operator_domain, node_name, input_names, output_names, attributes, p_);
 }
 
-inline Node::Node(const std::string& operator_name, const std::string operator_domain,
+inline Node::Node(const std::string& operator_name, const std::string& operator_domain,
                   const std::string& node_name,
                   const std::vector<std::string>& input_names,
                   const std::vector<std::string>& output_names) {

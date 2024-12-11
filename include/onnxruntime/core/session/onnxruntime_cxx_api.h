@@ -2584,7 +2584,7 @@ struct Node : detail::NodeImpl<OrtNode> {
   explicit Node(std::nullptr_t) {}                     ///< No instance is created
   explicit Node(OrtNode* p) : NodeImpl<OrtNode>{p} {}  ///< Take ownership of a pointer created by C Api
 
-  Node(const std::string& operator_name, const std::string operator_domain,
+  Node(const std::string& operator_name, const std::string& operator_domain,
        const std::string& node_name,
        const std::vector<std::string>& input_names,
        const std::vector<std::string>& output_names);
@@ -2592,7 +2592,7 @@ struct Node : detail::NodeImpl<OrtNode> {
   /// <summary>
   /// Wraps CreateNode. Node takes ownership of attributes on success and updates the OpAttr in `attributes` to do so.
   /// </summary>
-  Node(const std::string& operator_name, const std::string operator_domain,
+  Node(const std::string& operator_name, const std::string& operator_domain,
        const std::string& node_name,
        const std::vector<std::string>& input_names,
        const std::vector<std::string>& output_names,
@@ -2601,7 +2601,7 @@ struct Node : detail::NodeImpl<OrtNode> {
   ConstNode GetConst() const { return ConstNode{this->p_}; }
 
  private:
-  static void Init(const std::string& operator_name, const std::string operator_domain,
+  static void Init(const std::string& operator_name, const std::string& operator_domain,
                    const std::string& node_name,
                    const std::vector<std::string>& input_names,
                    const std::vector<std::string>& output_names,
