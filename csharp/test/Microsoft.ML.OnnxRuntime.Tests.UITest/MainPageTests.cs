@@ -7,6 +7,7 @@ using OpenQA.Selenium.Appium;
 using OpenQA.Selenium.Appium.Interfaces;
 using OpenQA.Selenium.Appium.Windows;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Microsoft.ML.OnnxRuntime.Tests.MAUI.UITest;
 // Add a CollectionDefinition together with a ICollectionFixture
@@ -24,6 +25,8 @@ public class MainPageTests
 {
     protected AppiumDriver App => AppiumSetup.App;
 
+    private readonly ITestOutputHelper _output;
+
     [Fact]
     public void FailingOutputTest()
     {
@@ -38,25 +41,44 @@ public class MainPageTests
     }
 
 
-    //[Fact]
-    //public async void ClickRunAllTest()
-    //{
-    //    Console.WriteLine("In the ClickRunAllTest");
+    [Fact]
+    public async void ClickRunAllTest()
+    {
+        Console.WriteLine("In the ClickRunAllTest");
 
-    //    var element = App.FindElement(By.XPath(".//*[text()='Run All  ►►']"));
+        //var element = App.FindElement(By.XPath("//Button[contains(@Text, 'Run All')]"));
 
-    //    Console.WriteLine("found element with text", element.Text);
+        //Console.WriteLine("found element with text", element.Text);
 
-    //    Assert.Equal("Run All  ►►", element.Text);
+        //Assert.Equal("Run All  ►►", element.Text);
 
-    //    element.Click();
+        //element.Click();
 
-    //    //String color = "SuccessfulTestsColor";
-    //    //String binding = "Passed";
-    //    //MobileElement label = driver.findElementByXPath("//Label[@TextColor='" + color + "' and @Text='" + binding + "']");
-    //    //String labelText = label.getText();
-    //    //System.out.println("The text displayed by the Label is: " + labelText);
+        //String color = "SuccessfulTestsColor";
+        //String binding = "Passed";
+        //MobileElement label = driver.findElementByXPath("//Label[@TextColor='" + color + "' and @Text='" + binding + "']");
+        //String labelText = label.getText();
+        //System.out.println("The text displayed by the Label is: " + labelText);
 
-    //    //await Task.Delay(600).Wait();
-    //}
+        //await Task.Delay(600).Wait();
+
+        IReadOnlyCollection<AppiumElement> elements = App.FindElements(By.XPath("//Button"));
+
+        AppiumElement btn;
+        foreach (var element in elements)
+        {
+            if (element.Text.Contains("Run All"))
+            {
+                btn = element;
+                element.Click();
+                break;
+            }
+        }
+
+        
+
+
+        
+
+    }
 }
