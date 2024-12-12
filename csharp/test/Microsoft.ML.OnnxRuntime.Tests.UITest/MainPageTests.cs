@@ -27,6 +27,11 @@ public class MainPageTests
 
     private readonly ITestOutputHelper _output;
 
+    public MainPageTests(ITestOutputHelper output)
+    {
+        _output = output;
+    }
+
     [Fact]
     public void FailingOutputTest()
     {
@@ -42,43 +47,35 @@ public class MainPageTests
 
 
     [Fact]
-    public async void ClickRunAllTest()
+    public async Task ClickRunAllTest()
     {
         Console.WriteLine("In the ClickRunAllTest");
 
-        //var element = App.FindElement(By.XPath("//Button[contains(@Text, 'Run All')]"));
-
-        //Console.WriteLine("found element with text", element.Text);
-
-        //Assert.Equal("Run All  ►►", element.Text);
-
-        //element.Click();
-
-        //String color = "SuccessfulTestsColor";
-        //String binding = "Passed";
-        //MobileElement label = driver.findElementByXPath("//Label[@TextColor='" + color + "' and @Text='" + binding + "']");
-        //String labelText = label.getText();
-        //System.out.println("The text displayed by the Label is: " + labelText);
-
-        //await Task.Delay(600).Wait();
-
         IReadOnlyCollection<AppiumElement> elements = App.FindElements(By.XPath("//Button"));
 
-        AppiumElement btn;
+        AppiumElement? btn = null;
         foreach (var element in elements)
         {
+            _output.WriteLine("We're at element " + element.Text);
             if (element.Text.Contains("Run All"))
             {
+                _output.WriteLine("Found run all button");
+                _output.WriteLine("");
                 btn = element;
                 element.Click();
                 break;
             }
         }
 
-        
+        Assert.NotNull(btn ?? throw new Xunit.Sdk.XunitException("Run All button was not found."));
 
+        while (!btn.Enabled)
+        {
+            // whille the button is disabled, then wait half a second
+            Task.Delay(500).Wait();
+        }
 
-        
+        _output.WriteLine("BUTTON IS ENABLED AGAIN");
 
     }
 }
