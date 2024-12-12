@@ -6,6 +6,8 @@ using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
 using OpenQA.Selenium.Appium.Interfaces;
 using OpenQA.Selenium.Appium.Windows;
+using OpenQA.Selenium.DevTools.V119.DOMStorage;
+using Org.Xmlpull.V1.Sax2;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -51,10 +53,10 @@ public class MainPageTests
     {
         Console.WriteLine("In the ClickRunAllTest");
 
-        IReadOnlyCollection<AppiumElement> elements = App.FindElements(By.XPath("//Button"));
+        IReadOnlyCollection<AppiumElement> btnElements = App.FindElements(By.XPath("//Button"));
 
         AppiumElement? btn = null;
-        foreach (var element in elements)
+        foreach (var element in btnElements)
         {
             _output.WriteLine("We're at element " + element.Text);
             if (element.Text.Contains("Run All"))
@@ -76,6 +78,68 @@ public class MainPageTests
         }
 
         _output.WriteLine("BUTTON IS ENABLED AGAIN");
+
+        IReadOnlyCollection<AppiumElement> labelElements = App.FindElements(By.XPath("//Text"));
+        int numPassed = -1;
+        int numFailed = -1;
+
+        for (int i = 0; i < labelElements.Count; i++)
+        {
+            AppiumElement element = labelElements.ElementAt(i);
+
+            _output.WriteLine("We're at label element with tag name " + element.TagName);
+            _output.WriteLine("We're at label element with text " + element.Text);
+            
+            if (element.Text.Equals("✔"))
+            {
+                _output.WriteLine("Matched with success indicator");
+                i++;
+                numPassed = int.Parse(labelElements.ElementAt(i).Text);
+            }
+
+            if (element.Text.Equals("⛔"))
+            {
+                _output.WriteLine("Matched with Failure indicator");
+                i++;
+                numFailed = int.Parse(labelElements.ElementAt(i).Text);
+                element.Click();
+                Task.Delay(5000).Wait();
+                break;
+            }
+        }
+
+        // if either of these are -1, then we couldn't find the correct labels;
+        Assert.True(numPassed >= 0, "Could not find number passed label.");
+        Assert.True(numFailed >= 0, "Could not find number failed label.");
+
+        if (numFailed == 0)
+        {
+            // all tests passed! wahoo!
+            return;
+        }
+
+        _output.WriteLine("on the results page =============================");
+
+        IReadOnlyCollection<AppiumElement> elements = App.FindElements(By.XPath("//*"));
+
+        foreach (var element in elements)
+        {
+            _output.WriteLine("We're at label element with tag name " + element.TagName);
+            _output.WriteLine("We're at label element with text " + element.Text);
+
+            if (element.Text.Equals("✔"))
+            {
+                _output.WriteLine("Matched with success indicator");
+            }
+
+            if (element.Text.Equals("⛔"))
+            {
+                _output.WriteLine("Matched with Failure indicator");
+                //element.Click();
+                //Task.Delay(5000).Wait();
+                break;
+            }
+        }
 
     }
 }
