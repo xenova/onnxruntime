@@ -2061,7 +2061,7 @@ including arg name, arg type (contains both type and shape).)pbdoc")
                  if (!px.first.IsOK() || !px.second) {
                    throw std::runtime_error("Either failed to get model inputs from the session object or the input def list was null");
                  }
-                 CreateGenericMLValue(px.second, GetAllocator(), feed.first, feed.second, &ml_value);
+                 CreateGenericMLValue(px.second, GetAllocator(), feed.first, feed.second, ml_value);
                  ThrowIfPyErrOccured();
                  feeds.insert(std::make_pair(feed.first, std::move(ml_value)));
                }
@@ -2123,7 +2123,7 @@ including arg name, arg type (contains both type and shape).)pbdoc")
                  if (!px.first.IsOK() || !px.second) {
                    throw std::runtime_error("Either failed to get model inputs from the session object or the input def list was null");
                  }
-                 CreateGenericMLValue(px.second, GetAllocator(), feed.first, feed.second, &ml_value);
+                 CreateGenericMLValue(px.second, GetAllocator(), feed.first, feed.second, ml_value);
                  ThrowIfPyErrOccured();
                  async_resource->feeds.push_back(ml_value);
                  async_resource->feeds_raw.push_back(&async_resource->feeds.back());

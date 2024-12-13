@@ -13,6 +13,7 @@
 #include "core/framework/tensor_shape.h"
 #include "core/framework/tensor.h"
 #include "core/framework/allocator.h"
+#include "core/framework/tensorprotoutils.h"
 #include "core/framework/TensorSeq.h"
 #include "core/framework/data_types.h"
 #include "core/framework/onnxruntime_typeinfo.h"
@@ -81,15 +82,6 @@ bool IsNumericDType(const py::dtype& dtype) {
   return std::any_of(numeric.cbegin(), numeric.cend(), [&dtype](const py::dtype& dt) {
     return dtype.is(dt);
   });
-}
-
-static TensorShape GetArrayShape(PyArrayObject* pyObject) {
-  const int ndim = PyArray_NDIM(pyObject);
-  const npy_intp* npy_dims = PyArray_DIMS(pyObject);
-  auto span = gsl::make_span(npy_dims, ndim);
-  TensorShapeVector shape_vec(span.begin(), span.end());
-  TensorShape shape(shape_vec);
-  return shape;
 }
 
 TensorShape GetShape(const py::array& arr) {
@@ -280,7 +272,7 @@ void DmlToCpuMemCpy(void* dst, const void* src, size_t num_bytes) {
   uint32_t readback_heap_size = gsl::narrow_cast<uint32_t>(sizeof(readback_heap));
   ORT_THROW_IF_FAILED(d3d12_device->GetPrivateData(dml_readback_heap_guid, &readback_heap_size, &readback_heap));
 
-  // ReadbackFromGpu already syncs with the CPU and waits for the copy to be completed, so we don't need to sync after
+  // ReadbackFromGpu already syncs with the CPU and waits for the copy to be completed, so we dont need to sync after
   // this call
   readback_heap->ReadbackFromGpu(
       gsl::make_span(static_cast<std::byte*>(dst), num_bytes),
@@ -428,7 +420,7 @@ MLDataType NumpyTypeToOnnxRuntimeTensorType(int numpy_type) {
       // Special, not a C type expands to enum value of 16
       {NPY_FLOAT16, DataTypeImpl::GetType<MLFloat16>()},
       {NPY_DOUBLE, DataTypeImpl::GetType<double>()},
-      // We don't want to use size specific types such
+      // We dont want to use size specific types such
       // as NPY_INT32 bc they are not enums but hash defines
       // which may map into other enums and may conflict with other entries here
       // also NPY docs define these sizes as platform specific, thus we
@@ -471,85 +463,26 @@ MLDataType OnnxTypeToOnnxRuntimeTensorType(int onnx_element_type) {
   return DataTypeImpl::TensorTypeFromONNXEnum(onnx_element_type)->GetElementType();
 }
 
-// This is a one time use, ad-hoc allocator that allows Tensors to take ownership of
-// python array objects and use the underlying memory directly and
-// properly deallocated them when they are done.
-//
-// This addresses the case when our interfaces receive python lists on the input.
-// We have to convert them into new Numpy arrays which 1) needs to be properly deallocated
-// because they are not owned by the calling python code (we create it inside pybind code)
-// 2) we still want to avoid yet another data copy and use it directly if possible
-// 3) string data types still need to be copied
-//
-// This is a stateful allocator. It will always return the same pre-allocated
-// buffer pointer and will own references to underlying objects.
-class OrtPybindSingleUseAllocator : public IAllocator {
- public:
-  // This constructor is used when we create numpy array from python list
-  OrtPybindSingleUseAllocator(PyArrayObject* pyObject, const std::string& value_name, const OrtMemoryInfo& mem_info)
-      : IAllocator(mem_info),
-        pyObject_(pyObject, DecRefFn<PyArrayObject>()),
-        pyObjectContiguous_(PyArray_GETCONTIGUOUS(pyObject), DecRefFn<PyArrayObject>()) {
-    ORT_ENFORCE(pyObjectContiguous_ != nullptr, "The object must be a contiguous array for input :", value_name);
-  }
-
-  // Constructor to use when a contiguous array had to be copied. Instead of creating yet another copy
-  // we are still able to use it directly for primitive types
-  OrtPybindSingleUseAllocator(UniqueDecRefPtr<PyArrayObject>&& pyContiguous, const std::string& value_name,
-                              const OrtMemoryInfo& mem_info)
-      : IAllocator(mem_info),
-        pyObject_(nullptr, DecRefFn<PyArrayObject>()),
-        pyObjectContiguous_(std::move(pyContiguous)) {
-    ORT_ENFORCE(pyObjectContiguous_ != nullptr, "Expecting a valid contiguous array:", value_name);
-  }
-
-  ORT_DISALLOW_COPY_AND_ASSIGNMENT(OrtPybindSingleUseAllocator);
-
-  // Always return pre-allocated buffer
-  // which actually contains the array data
-  void* Alloc(size_t) override {
-    return static_cast<void*>(PyArray_DATA(pyObjectContiguous_.get()));
-  }
-
-  void Free(void*) override {
-    // Free when requested, do not wait for
-    // destruction of the allocator which may
-    // be non-deterministic. However, we do not anticipate
-    // true shared ownership of the allocator object except
-    // at the creation stack.
-    pyObjectContiguous_.reset();
-    pyObject_.reset();
-  }
-
-  PyArrayObject* GetContiguous() const {
-    return pyObjectContiguous_.get();
-  }
-
- private:
-  UniqueDecRefPtr<PyArrayObject> pyObject_;
-  UniqueDecRefPtr<PyArrayObject> pyObjectContiguous_;
-};
-
-using OrtPybindSingleUseAllocatorPtr = std::shared_ptr<OrtPybindSingleUseAllocator>;
-
-// Expects p_tensor properly created
-// Does not manage darray life-cycle
-
-static void CopyDataToTensor(PyArrayObject* darray, int npy_type, Tensor& tensor,
-                             MemCpyFunc mem_cpy_to_device = CpuToCpuMemCpy) {
+// Expects tensor allocated
+// Requires the input array to be c_contigious for primitive types so they can be mem-copied
+// Seq can be either py::array or some py::sequence, however, for memcpy we attempt to cast to array.
+void CopyDataToTensor(const py::array& py_array, int npy_type, Tensor& tensor, MemCpyFunc mem_cpy_to_device) {
+  // The iteration is wrong for py_array for some reason, use indexing
+  const PyArrayObject* darray = reinterpret_cast<const PyArrayObject*>(py_array.ptr());
   const auto total_items = tensor.Shape().Size();
+  assert(total_items == py_array.size());
+  const auto item_size = py_array.itemsize();
   if (npy_type == NPY_UNICODE) {
     // Copy string data which needs to be done after Tensor is allocated.
-    // Strings are Python strings or numpy.unicode string.
-    std::string* dst = tensor.MutableData<std::string>();
-    const auto item_size = PyArray_ITEMSIZE(darray);
+    // and convert all of the above to strings
+    auto dst = tensor.MutableDataAsSpan<std::string>();
     const auto num_chars = item_size / PyUnicode_4BYTE_KIND;
-    const char* src = reinterpret_cast<const char*>(PyArray_DATA(darray));
-    for (int i = 0; i < total_items; i++, src += item_size) {
-      // Python unicode strings are assumed to be USC-4. Strings are stored as UTF-8.
+    const char* src = reinterpret_cast<const char*>(py_array.data());
+    for (int i = 0; i < total_items; ++i, src += item_size) {
       PyObject* pStr = PyUnicode_FromKindAndData(PyUnicode_4BYTE_KIND, src, num_chars);
       UniqueDecRefPtr<PyObject> strGuard(pStr, DecRefFn<PyObject>());
       const char* str = PyUnicode_AsUTF8(pStr);
+      UniqueDecRefPtr<PyObject> strUtf8Guard(pStr, DecRefFn<PyObject>());
       if (str == NULL) {
         dst[i].clear();
       } else {
@@ -558,14 +491,13 @@ static void CopyDataToTensor(PyArrayObject* darray, int npy_type, Tensor& tensor
         dst[i] = str;
       }
     }
-  } else if (npy_type == NPY_STRING || npy_type == NPY_VOID) {
+  } else if (npy_type == NPY_VOID || npy_type == NPY_STRING) {
     // Copy string data which needs to be done after Tensor is allocated.
     // Strings are given as bytes (encoded strings).
     // NPY_VOID does not trim final 0.
     // NPY_STRING assumes bytes string ends with a final 0.
     std::string* dst = tensor.MutableData<std::string>();
-    const auto item_size = PyArray_ITEMSIZE(darray);
-    const char* src = reinterpret_cast<const char*>(PyArray_DATA(darray));
+    const char* src = reinterpret_cast<const char*>(py_array.data());
     for (int i = 0; i < total_items; i++, src += item_size) {
       if (npy_type == NPY_STRING) {
         dst[i] = src;
@@ -576,8 +508,7 @@ static void CopyDataToTensor(PyArrayObject* darray, int npy_type, Tensor& tensor
   } else if (npy_type == NPY_OBJECT) {
     // Converts object into string.
     std::string* dst = tensor.MutableData<std::string>();
-    const auto item_size = PyArray_ITEMSIZE(darray);
-    const char* src = reinterpret_cast<const char*>(PyArray_DATA(darray));
+    const char* src = reinterpret_cast<const char*>(py_array.data());
     for (int i = 0; i < total_items; ++i, src += item_size) {
       // Python unicode strings are assumed to be USC-4. Strings are stored as UTF-8.
       PyObject* item = PyArray_GETITEM(darray, src);
@@ -586,57 +517,14 @@ static void CopyDataToTensor(PyArrayObject* darray, int npy_type, Tensor& tensor
       dst[i] = py::reinterpret_borrow<py::str>(pStr);
     }
   } else {
-    void* buffer = tensor.MutableDataRaw();
     size_t len = 0;
     Status status = Tensor::CalculateTensorStorageSize(tensor.DataType(), tensor.Shape(), /*alignment*/ 0, len);
     if (!status.IsOK()) {
       throw std::runtime_error(status.ErrorMessage());
     }
-    mem_cpy_to_device(buffer, PyArray_DATA(darray), len);
-  }
-}
-
-void CopyDataToTensor(const py::array& py_array, int npy_type, Tensor& tensor, MemCpyFunc mem_cpy_to_device) {
-  const auto total_items = tensor.Shape().Size();
-  assert(total_items == py_array.size());
-  if (npy_type == NPY_UNICODE || npy_type == NPY_OBJECT) {
-    // Copy string data which needs to be done after Tensor is allocated.
-    // and convert other types of objects to strings
-    auto dst = tensor.MutableDataAsSpan<std::string>();
-    size_t i = 0;
-    for (const auto& item : py_array) {
-      if (item.is_none()) {
-        dst[i++].clear();
-      } else {
-        dst[i++] = py::str(item);
-      }
-    }
-  } else if (npy_type == NPY_STRING || npy_type == NPY_VOID) {
-    // We load these things as bytes
-    // but the array may or may not be contigious
-    std::string* dst = tensor.MutableData<std::string>();
-    size_t i = 0;
-    for (const auto& item : py_array) {
-      auto bytes = item.cast<py::bytes>();
-      std::string_view view = bytes;
-      dst[i++].assign(view.data(), view.size());
-    }
-    // const auto item_size = py_array.itemsize();
-    // const char* src = reinterpret_cast<const char*>(py_array.data());
-    // for (int i = 0; i < total_items; i++, src += item_size) {
-    //   if (npy_type == NPY_STRING) {
-    //     // Expected to be zero terminated
-    //     dst[i] = src;
-    //   } else {
-    //     dst[i].assign(src, item_size);
-    //   }
-    // }
-  } else {
     void* buffer = tensor.MutableDataRaw();
-    size_t len = 0;
-    Status status = Tensor::CalculateTensorStorageSize(tensor.DataType(), tensor.Shape(), /*alignment*/ 0, len);
-    if (!status.IsOK()) {
-      throw std::runtime_error(status.ErrorMessage());
+    if ((py_array.flags() & py::array::c_style) == 0) {
+      throw std::runtime_error("CopyData from sequence: Expecting a contiguous array");
     }
     mem_cpy_to_device(buffer, py_array.data(), len);
   }
@@ -645,17 +533,17 @@ void CopyDataToTensor(const py::array& py_array, int npy_type, Tensor& tensor, M
 // Setting `use_numpy_data_memory` to `true` will ensure that the underlying numpy array buffer is directly used
 // as the backing data buffer for the ORT Tensor where applicable (for numeric tensors)
 // The numpy object owns the memory and needs to be alive until the corresponding OrtValue is in scope
-static Tensor CreateTensor(const AllocatorPtr& alloc, const std::string& name_input,
-                           const py::array& py_array, bool use_numpy_data_memory = true,
-                           MemCpyFunc mem_cpy_to_device = CpuToCpuMemCpy) {
-  const PyArrayObject* pyObject = reinterpret_cast<PyArrayObject*>(py_array.ptr());
-  const int npy_type = PyArray_TYPE(pyObject);
+static Tensor CreateTensorOverPrimitiveDataOrCopy(const AllocatorPtr& alloc,
+                                                  const py::array& py_array,
+                                                  int npy_type,
+                                                  bool use_numpy_data_memory = true,
+                                                  MemCpyFunc mem_cpy_to_device = CpuToCpuMemCpy) {
   TensorShape shape = GetShape(py_array);
   auto element_type = NumpyTypeToOnnxRuntimeTensorType(npy_type);
 
   Tensor result;
 
-  if (IsNumericNumpyType(npy_type) && use_numpy_data_memory && PyArray_IS_C_CONTIGUOUS(pyObject)) {
+  if (IsNumericNumpyType(npy_type) && use_numpy_data_memory && (py_array.flags() & py::array::c_style)) {
     // const_cast is necessary due to Tensor API
     result = Tensor(element_type, shape, const_cast<void*>(py_array.data()), alloc->Info());
   } else {
@@ -702,7 +590,9 @@ static void CreateSequenceOfTensors(AllocatorPtr alloc, const std::string& name_
   // set the seq type
   MLDataType seq_dtype = OrtTypeInfo::ElementTypeFromProto(
       static_cast<ONNX_NAMESPACE::TensorProto_DataType>(type_proto.sequence_type().elem_type().tensor_type().elem_type()));
-  auto p_seq_tensors = std::make_unique<TensorSeq>(seq_dtype);
+  int npy_type = OnnxRuntimeTensorToNumpyType(seq_dtype);
+
+  auto p_tensor_sequence = std::make_unique<TensorSeq>(seq_dtype);
 
   // populate the seq
   // expecting a list of numpy arrays
@@ -711,46 +601,34 @@ static void CreateSequenceOfTensors(AllocatorPtr alloc, const std::string& name_
     if (!py_array) {
       throw std::runtime_error("CreateSequenceOfTensors: list item is not a numpy array");
     }
-    auto tensor = CreateTensor(alloc, name_input, py_array);
-    p_seq_tensors->Add(std::move(tensor));
+    TensorShape shape = GetShape(py_array);
+    Tensor tensor(seq_dtype, shape, alloc);
+    CopyDataToTensor(py_array, npy_type, tensor, CpuToCpuMemCpy);
+    p_tensor_sequence->Add(std::move(tensor));
   }
 
   auto ml_tensor_sequence = DataTypeImpl::GetType<TensorSeq>();
-  mlvalue.Init(p_seq_tensors.release(),
+  mlvalue.Init(p_tensor_sequence.release(),
                ml_tensor_sequence,
                ml_tensor_sequence->GetDeleteFunc());
 }
 
-// Setting `use_numpy_data_memory` to `true` will ensure that the underlying numpy array buffer is directly used
-// as the backing data buffer for the ORT Tensor where applicable (for numeric tensors)
-// The numpy object owns the memory and needs to be alive until the corresponding OrtValue is in scope
-static void CreateTensorMLValue(const AllocatorPtr& alloc, const std::string& name_input, py::array& py_array,
-                                OrtValue& mlvalue, bool use_numpy_data_memory = true, MemCpyFunc mem_cpy_to_device = CpuToCpuMemCpy) {
-  auto tensor = CreateTensor(alloc, name_input, py_array, use_numpy_data_memory, mem_cpy_to_device);
-  Tensor::InitOrtValue(std::move(tensor), mlvalue);
-}
-
-// This function will create a Tensor that owns the python array memory. This is done to properly
-// release python arrays allocated within the pybind code.
-static void CreateTensorMLValueOwned(const OrtPybindSingleUseAllocatorPtr& pybind_alloc, const AllocatorPtr& alloc,
-                                     OrtValue& mlvalue) {
-  auto npy_type = PyArray_TYPE(pybind_alloc->GetContiguous());
-  TensorShape shape = GetArrayShape(pybind_alloc->GetContiguous());
-  auto element_type = NumpyTypeToOnnxRuntimeTensorType(npy_type);
-
-  Tensor tensor;
-
-  if (npy_type != NPY_UNICODE && npy_type != NPY_STRING &&
-      npy_type != NPY_VOID && npy_type != NPY_OBJECT) {
-    // We are able to reuse the memory of the contiguous python buffer and avoid
-    // extra copy using OrtPybindAllocator which will take care of the memory
-    tensor = Tensor(element_type, shape, pybind_alloc);
-  } else {
-    // We still need to copy elements properly from the contiguous buffer
-    tensor = Tensor(element_type, shape, alloc);
-    CopyDataToTensor(pybind_alloc->GetContiguous(), npy_type, tensor, CpuToCpuMemCpy);
+// This function will always copy data since we are getting a sequence as input
+// as if when the user directly supplied it. This is the edge case.
+static void CreateTensorMLValueFromSequence(const std::string& name_input,
+                                            const py::object& py_object,
+                                            MLDataType ml_type,
+                                            const AllocatorPtr& alloc,
+                                            OrtValue& mlvalue) {
+  auto py_array = py::array::ensure(py_object, py::array::c_style);
+  if (!py_array) {
+    throw std::runtime_error(
+        "CreateTensorMLValueFromSequence: unable to convert incoming object to py::array for input:" + name_input);
   }
-
+  TensorShape shape = GetShape(py_array);
+  Tensor tensor{ml_type, shape, alloc};
+  int npy_type = OnnxRuntimeTensorToNumpyType(ml_type);
+  CopyDataToTensor(py_array, npy_type, tensor, CpuToCpuMemCpy);
   Tensor::InitOrtValue(std::move(tensor), mlvalue);
 }
 
@@ -966,37 +844,34 @@ static void CreateGenericIterableMLValue(PyObject* iterator, AllocatorPtr alloc,
 // Setting `use_numpy_data_memory` to `true` will ensure that the underlying numpy array buffer is directly used
 // as the backing data buffer for the ORT Tensor where applicable (for numeric tensors)
 // The numpy object owns the memory and needs to be alive until the corresponding OrtValue is in scope
-void CreateGenericMLValue(const onnxruntime::InputDefList* input_def_list, const AllocatorPtr& alloc, const std::string& name_input,
-                          const py::object& value, OrtValue& mlvalue, bool accept_only_numpy_array,
+void CreateGenericMLValue(const onnxruntime::InputDefList* input_def_list, const AllocatorPtr& alloc,
+                          const std::string& name_input, const py::object& value,
+                          OrtValue& mlvalue, bool accept_only_numpy_array,
                           bool use_numpy_data_memory, MemCpyFunc mem_cpy_to_device) {
-  onnx::TypeProto type_proto;
+  ONNX_NAMESPACE::TypeProto type_proto;
   if (PyObjectCheck_NumpyArray(value.ptr())) {
     // The most frequent case: input comes as an array.
+    int npy_type = GetNumpyArrayType(value);
     auto py_array = py::cast<py::array>(value);
-    CreateTensorMLValue(alloc, name_input, py_array, mlvalue, use_numpy_data_memory, mem_cpy_to_device);
+    if ((py_array.flags() & py::array::c_style) == 0) {
+      throw std::runtime_error("Input must be a contiguous array for input '" + name_input + "'.");
+    }
+    auto tensor = CreateTensorOverPrimitiveDataOrCopy(alloc, py_array, npy_type, use_numpy_data_memory,
+                                                      mem_cpy_to_device);
+    Tensor::InitOrtValue(std::move(tensor), mlvalue);
   } else if (!accept_only_numpy_array &&
              PyList_Check(value.ptr()) &&
              !CheckIfInputIsSequenceType(name_input, input_def_list, type_proto)) {
     // This is not a sequence tensor. This is just a regular tensor fed through as a list.
-    ORT_ENFORCE(type_proto.tensor_type().has_elem_type(), "The graph is missing type information needed to construct the ORT tensor");
-
-    MLDataType dtype = OrtTypeInfo::ElementTypeFromProto(
-        static_cast<ONNX_NAMESPACE::TensorProto_DataType>(type_proto.tensor_type().elem_type()));
-
-    int numpy_dtype = OnnxRuntimeTensorToNumpyType(dtype);
-
-    // This creates a new object with its own reference count
-    PyArrayObject* arr = reinterpret_cast<PyArrayObject*>(
-        PyArray_FromAny(value.ptr(), PyArray_DescrFromType(numpy_dtype), 0, 0, 0, nullptr));
-
-    if (!arr) {
-      throw std::runtime_error("Could not create tensor from given input list");
+    if (!(utils::HasTensorType(type_proto) && utils::HasElementType(type_proto))) {
+      throw std::runtime_error(
+          "The graph is missing type information needed to construct the ORT tensor for input " + name_input);
     }
 
-    // The allocator will own the array memory and will decrement the reference on Free()
-    // or when destroyed
-    auto pybind_alloc = std::make_shared<OrtPybindSingleUseAllocator>(arr, name_input, alloc->Info());
-    CreateTensorMLValueOwned(pybind_alloc, alloc, mlvalue);
+    MLDataType ml_type = OrtTypeInfo::ElementTypeFromProto(
+        static_cast<ONNX_NAMESPACE::TensorProto_DataType>(type_proto.tensor_type().elem_type()));
+
+    CreateTensorMLValueFromSequence(name_input, value, ml_type, alloc, mlvalue);
   } else if (!accept_only_numpy_array && PyList_Check(value.ptr())) {
     auto py_list = py::cast<py::list>(value);
     CreateSequenceOfTensors(alloc, name_input, input_def_list, py_list, mlvalue);

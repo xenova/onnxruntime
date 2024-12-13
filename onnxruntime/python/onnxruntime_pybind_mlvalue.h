@@ -120,7 +120,7 @@ const std::unordered_map<OrtDevice::DeviceType, MemCpyFunc>* GetRocmToHostMemCpy
 #endif
 
 void CreateGenericMLValue(const onnxruntime::InputDefList* input_def_list, const AllocatorPtr& alloc,
-                          const std::string& name_input, const pybind11::object& value, OrtValue* p_mlvalue,
+                          const std::string& name_input, const pybind11::object& value, OrtValue& p_mlvalue,
                           bool accept_only_numpy_array = false, bool use_numpy_data_memory = true, MemCpyFunc mem_cpy_to_device = CpuToCpuMemCpy);
 
 pybind11::object GetPyObjFromTensor(const OrtValue& rtensor,

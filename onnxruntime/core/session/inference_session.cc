@@ -291,7 +291,7 @@ static Status FinalizeSessionOptions(const SessionOptions& user_provided_session
   if (session_options_from_model) {
     SessionOptions constructed_session_options;
 
-    // In theory we should not hit this condition unless this internal class' APIs are being called incorrectly.
+    // In theory we should not hit this condition unless this internal class APIs are being called incorrectly.
     // This is a good sanity check to enforce that the model has been parsed prior to looking into it for ort config.
     ORT_ENFORCE(is_model_proto_parsed, "ModelProto needs to be parsed to check for ORT config within it");
 

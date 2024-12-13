@@ -74,7 +74,7 @@ void addOrtValueMethods(pybind11::module& m) {
           // InputDeflist is null because OrtValue creation is not tied to a specific model
           // Likewise, there is no need to specify the name (as the name was previously used to lookup the def list)
 
-          CreateGenericMLValue(nullptr, GetAllocator(), "", array_on_cpu, ml_value.get(), true);
+          CreateGenericMLValue(nullptr, GetAllocator(), "", array_on_cpu, *ml_value, true);
         } else if (device.Type() == OrtDevice::GPU) {
       // The tensor's memory is allocated on CUDA
 
@@ -86,7 +86,7 @@ void addOrtValueMethods(pybind11::module& m) {
           // InputDeflist is null because OrtValue creation is not tied to a specific model
           // Likewise, there is no need to specify the name (as the name was previously used to lookup the def list)
           // TODO: Add check to ensure that string arrays are not passed - we currently don't support string tensors in CUDA
-          CreateGenericMLValue(nullptr, GetCudaAllocator(device.Id()), "", array_on_cpu, ml_value.get(), true, false, CpuToCudaMemCpy);
+          CreateGenericMLValue(nullptr, GetCudaAllocator(device.Id()), "", array_on_cpu, *ml_value, true, false, CpuToCudaMemCpy);
 #elif USE_ROCM
       if (!IsRocmDeviceIdValid(logging::LoggingManager::DefaultLogger(), device.Id())) {
         throw std::runtime_error("The provided device id doesn't match any available GPUs on the machine.");
@@ -95,7 +95,7 @@ void addOrtValueMethods(pybind11::module& m) {
       // InputDeflist is null because OrtValue creation is not tied to a specific model
       // Likewise, there is no need to specify the name (as the name was previously used to lookup the def list)
       // TODO: Add check to ensure that string arrays are not passed - we currently don't support string tensors in CUDA
-      CreateGenericMLValue(nullptr, GetRocmAllocator(device.Id()), "", array_on_cpu, ml_value.get(), true, false, CpuToRocmMemCpy);
+      CreateGenericMLValue(nullptr, GetRocmAllocator(device.Id()), "", array_on_cpu, *ml_value, true, false, CpuToRocmMemCpy);
 #else
           throw std::runtime_error(
               "Can't allocate memory on the CUDA device using this package of OnnxRuntime. "
@@ -107,7 +107,7 @@ void addOrtValueMethods(pybind11::module& m) {
           // Likewise, there is no need to specify the name (as the name was previously used to lookup the def list)
           // TODO: Add check to ensure that string arrays are not passed - we currently don't support string tensors in DML
           CreateGenericMLValue(
-              nullptr, GetDmlAllocator(device.Id()), "", array_on_cpu, ml_value.get(), true, false, CpuToDmlMemCpy);
+              nullptr, GetDmlAllocator(device.Id()), "", array_on_cpu, *ml_value, true, false, CpuToDmlMemCpy);
 #else
           throw std::runtime_error(
               "Can't allocate memory on the CUDA device using this package of OnnxRuntime. "
@@ -119,7 +119,7 @@ void addOrtValueMethods(pybind11::module& m) {
             throw std::runtime_error("The provided device id doesn't match any available NPUs on the machine.");
           }
 
-          CreateGenericMLValue(nullptr, GetCannAllocator(device.Id()), "", array_on_cpu, ml_value.get(),
+          CreateGenericMLValue(nullptr, GetCannAllocator(device.Id()), "", array_on_cpu, *ml_value,
                                true, false, CpuToCannMemCpy);
 #else
           throw std::runtime_error(

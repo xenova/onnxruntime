@@ -83,7 +83,7 @@ void addIoBindingMethods(pybind11::module& m) {
 
         OrtValue ml_value;
         // Set the parameter `accept_only_numpy_array` to `true` (we only support binding Tensors)
-        CreateGenericMLValue(px.second, GetAllocator(), name, arr_on_cpu, &ml_value, true);
+        CreateGenericMLValue(px.second, GetAllocator(), name, arr_on_cpu, ml_value, true);
 
         auto status = io_binding->Get()->BindInput(name, ml_value);
         if (!status.IsOK()) {
