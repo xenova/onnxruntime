@@ -50,18 +50,14 @@ public class MainPageTests
     [Fact]
     public async Task ClickRunAllTest()
     {
-        Console.WriteLine("In the ClickRunAllTest");
 
         IReadOnlyCollection<AppiumElement> btnElements = App.FindElements(By.XPath("//Button"));
 
         AppiumElement? btn = null;
         foreach (var element in btnElements)
         {
-            _output.WriteLine("We're at element " + element.Text);
             if (element.Text.Contains("Run All"))
             {
-                _output.WriteLine("Found run all button");
-                _output.WriteLine("");
                 btn = element;
                 element.Click();
                 break;
@@ -76,8 +72,6 @@ public class MainPageTests
             Task.Delay(500).Wait();
         }
 
-        _output.WriteLine("BUTTON IS ENABLED AGAIN");
-
         IReadOnlyCollection<AppiumElement> labelElements = App.FindElements(By.XPath("//Text"));
         int numPassed = -1;
         int numFailed = -1;
@@ -85,20 +79,15 @@ public class MainPageTests
         for (int i = 0; i < labelElements.Count; i++)
         {
             AppiumElement element = labelElements.ElementAt(i);
-
-            _output.WriteLine("We're at label element with tag name " + element.TagName);
-            _output.WriteLine("We're at label element with text " + element.Text);
             
             if (element.Text.Equals("✔"))
             {
-                _output.WriteLine("Matched with success indicator");
                 i++;
                 numPassed = int.Parse(labelElements.ElementAt(i).Text);
             }
 
             if (element.Text.Equals("⛔"))
             {
-                _output.WriteLine("Matched with Failure indicator");
                 i++;
                 numFailed = int.Parse(labelElements.ElementAt(i).Text);
                 element.Click();
@@ -126,18 +115,6 @@ public class MainPageTests
             _output.WriteLine("We're at label element with tag name " + element.TagName);
             _output.WriteLine("We're at label element with text " + element.Text);
 
-            if (element.Text.Equals("✔"))
-            {
-                _output.WriteLine("Matched with success indicator");
-            }
-
-            if (element.Text.Equals("⛔"))
-            {
-                _output.WriteLine("Matched with Failure indicator");
-                //element.Click();
-                //Task.Delay(5000).Wait();
-                break;
-            }
             element.Click();
             Task.Delay(500).Wait();
         }
@@ -146,12 +123,16 @@ public class MainPageTests
 
         IReadOnlyCollection<AppiumElement> elements2 = App.FindElements(By.XPath("//ListItem"));
 
-        foreach (var element in elements2)
+        foreach (var element2 in elements2)
         {
-            if (element.Text.Equals("Failed"))
+            _output.WriteLine("We're at label element with tag name " + element2.TagName);
+            _output.WriteLine("We're at label element with text " + element2.Text);
+
+            if (element2.Text.Equals("Failed"))
             {
-                element.Click();
+                element2.Click();
                 Task.Delay(500).Wait();
+                break;
             }
         }
 

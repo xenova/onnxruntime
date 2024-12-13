@@ -50,6 +50,7 @@ namespace Microsoft.ML.OnnxRuntime.Tensors.Tests
             Assert.Equal(3, tensor[1, 0]);
             Assert.Equal(4, tensor[1, 1]);
             Assert.Equal(5, tensor[1, 2]);
+            Assert.True(false);
         }
 
         [Theory(DisplayName = "ConstructTensorFromArrayRank3")]
