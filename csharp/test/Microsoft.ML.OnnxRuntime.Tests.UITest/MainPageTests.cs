@@ -7,7 +7,6 @@ using OpenQA.Selenium.Appium;
 using OpenQA.Selenium.Appium.Interfaces;
 using OpenQA.Selenium.Appium.Windows;
 using OpenQA.Selenium.DevTools.V119.DOMStorage;
-using Org.Xmlpull.V1.Sax2;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -103,7 +102,7 @@ public class MainPageTests
                 i++;
                 numFailed = int.Parse(labelElements.ElementAt(i).Text);
                 element.Click();
-                Task.Delay(5000).Wait();
+                Task.Delay(1000).Wait();
                 break;
             }
         }
@@ -120,7 +119,7 @@ public class MainPageTests
 
         _output.WriteLine("on the results page =============================");
 
-        IReadOnlyCollection<AppiumElement> elements = App.FindElements(By.XPath("//*"));
+        IReadOnlyCollection<AppiumElement> elements = App.FindElements(By.XPath("//ComboBox"));
 
         foreach (var element in elements)
         {
@@ -139,7 +138,33 @@ public class MainPageTests
                 //Task.Delay(5000).Wait();
                 break;
             }
+            element.Click();
+            Task.Delay(500).Wait();
         }
+
+        _output.WriteLine("clicked the combo box");
+
+        IReadOnlyCollection<AppiumElement> elements2 = App.FindElements(By.XPath("//ListItem"));
+
+        foreach (var element in elements2)
+        {
+            if (element.Text.Equals("Failed"))
+            {
+                element.Click();
+                Task.Delay(500).Wait();
+            }
+        }
+
+        StringBuilder sb = new StringBuilder();
+
+        IReadOnlyCollection<AppiumElement> textResults = App.FindElements(By.XPath("//Text"));
+
+        foreach (var element in textResults)
+        {
+            sb.AppendLine(element.Text);
+        }
+
+        Assert.True(numFailed == 0, sb.ToString());
 
     }
 }
