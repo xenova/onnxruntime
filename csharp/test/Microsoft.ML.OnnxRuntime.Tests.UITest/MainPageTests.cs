@@ -36,7 +36,6 @@ public class MainPageTests
     [Fact]
     public void FailingOutputTest()
     {
-        Console.WriteLine("This is test output.");
         throw new Exception("This is meant to fail.");
     }
 
@@ -69,7 +68,7 @@ public class MainPageTests
         while (!btn.Enabled)
         {
             // whille the button is disabled, then wait half a second
-            Task.Delay(500).Wait();
+            await Task.Delay(500);
         }
 
         IReadOnlyCollection<AppiumElement> labelElements = App.FindElements(By.XPath("//Text"));
@@ -91,7 +90,7 @@ public class MainPageTests
                 i++;
                 numFailed = int.Parse(labelElements.ElementAt(i).Text);
                 element.Click();
-                Task.Delay(1000).Wait();
+                await Task.Delay(1000);
                 break;
             }
         }
@@ -106,37 +105,26 @@ public class MainPageTests
             return;
         }
 
-        _output.WriteLine("on the results page =============================");
+        AppiumElement filterSelector = App.FindElement(By.XPath("//ComboBox"));
 
-        IReadOnlyCollection<AppiumElement> elements = App.FindElements(By.XPath("//ComboBox"));
+        filterSelector.Click();
+        await Task.Delay(500);
 
-        foreach (var element in elements)
+        IReadOnlyCollection<AppiumElement> filterOptions = App.FindElements(By.XPath("//ListItem"));
+
+        foreach (var filterOption in filterOptions)
         {
-            _output.WriteLine("We're at label element with tag name " + element.TagName);
-            _output.WriteLine("We're at label element with text " + element.Text);
-
-            element.Click();
-            Task.Delay(500).Wait();
-        }
-
-        _output.WriteLine("clicked the combo box");
-
-        IReadOnlyCollection<AppiumElement> elements2 = App.FindElements(By.XPath("//ListItem"));
-
-        foreach (var element2 in elements2)
-        {
-            _output.WriteLine("We're at label element with tag name " + element2.TagName);
-            _output.WriteLine("We're at label element with text " + element2.Text);
-
-            if (element2.Text.Equals("Failed"))
+            if (filterOption.Text.Equals("Failed"))
             {
-                element2.Click();
-                Task.Delay(500).Wait();
+                filterOption.Click();
+                await Task.Delay(500);
                 break;
             }
         }
 
         StringBuilder sb = new StringBuilder();
+
+        sb.AppendLine("PASSED TESTS: " + numPassed + " | FAILED TESTS: " + numFailed);
 
         IReadOnlyCollection<AppiumElement> textResults = App.FindElements(By.XPath("//Text"));
 
