@@ -35,10 +35,10 @@ struct InspectPrepackedSubgraph {
 // This specialization is used by SessionStateTestSharedInitalizersWithPrePacking.TestPrepackedSerialization down below
 // to be called on the main graph
 template <>
-void PrepackedForSerialization::Subgraph::TestHarness<InspectPrepackedSubgraph>(InspectPrepackedSubgraph&) const {
-  auto inspect = [](const PrepackedForSerialization::Subgraph& sub) {
+void PrepackedShareableWeightsContainer::WeightsForGraph::TestHarness<InspectPrepackedSubgraph>(InspectPrepackedSubgraph&) const {
+  auto inspect = [](const PrepackedShareableWeightsContainer::WeightsForGraph& sub) {
     const size_t expected_subgraphs = (sub.Parent() == nullptr) ? 2U : 0U;
-    ASSERT_EQ(sub.GetSubgraphNum(), expected_subgraphs);
+    ASSERT_EQ(sub.GetNumberOfSubgraphs(), expected_subgraphs);
 
     const size_t expected_prepacks_for_writing = (sub.Parent() == nullptr) ? 0U : 1U;
     ASSERT_EQ(expected_prepacks_for_writing, sub.GetNumberOfWeightsForWriting());
@@ -47,7 +47,7 @@ void PrepackedForSerialization::Subgraph::TestHarness<InspectPrepackedSubgraph>(
     ASSERT_EQ(expected_blobs_for_writing, sub.GetNumberOfKeyedBlobsForWriting());
 
     if (sub.Parent() != nullptr) {
-      const auto* blob_keys = sub.GetBlobsForWeight("if_shared");
+      const auto* blob_keys = sub.GetKeysForWeightForSaving("if_shared");
       ASSERT_TRUE(blob_keys != nullptr);
       ASSERT_EQ(blob_keys->size(), 1U);
       const auto* prepacked_weights = sub.GetPrepackedWeights(*blob_keys->cbegin());
@@ -67,11 +67,11 @@ struct InspectLoadedSharedPrepacked {
 };
 
 template <>
-void PrepackedForSerialization::Subgraph::TestHarness<InspectLoadedSharedPrepacked>(
+void PrepackedShareableWeightsContainer::WeightsForGraph::TestHarness<InspectLoadedSharedPrepacked>(
     InspectLoadedSharedPrepacked&) const {
-  auto inspect = [this](const PrepackedForSerialization::Subgraph& sub) {
+  auto inspect = [this](const PrepackedShareableWeightsContainer::WeightsForGraph& sub) {
     const size_t expected_subgraphs = (sub.Parent() == nullptr) ? 2U : 0U;
-    ASSERT_EQ(expected_subgraphs, sub.GetSubgraphNum());
+    ASSERT_EQ(expected_subgraphs, sub.GetNumberOfSubgraphs());
 
     // We are expecting to load only one shared pre-packed weight
     // Saving is off, so we should not have any pre-packed weights for writing

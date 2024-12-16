@@ -398,7 +398,7 @@ static std::string GenerateKeyForPrepackedWeightsMap(const std::string& op_type,
 }
 
 Status SessionState::PrepackConstantInitializedTensors(
-    PrepackedForSerialization::Subgraph& prepacked_subgraph,
+    PrepackedShareableWeightsContainer::WeightsForGraph& prepacked_subgraph,
     InlinedHashMap<std::string, size_t>& constant_initializers_use_count,
     const std::unordered_map<std::string, const OrtValue*>& initializers_to_share_map) {
   auto prepacked_constant_weights = [this, &prepacked_subgraph,
@@ -1436,7 +1436,7 @@ Status SessionState::FinalizeSessionStateImpl(const std::basic_string<PATH_CHAR_
                                               const SessionOptions& session_options,
                                               bool remove_initializers,
                                               InlinedHashMap<std::string, size_t>& constant_initializers_use_count,
-                                              PrepackedForSerialization::Subgraph& prepacked_subgraph,
+                                              PrepackedShareableWeightsContainer::WeightsForGraph& prepacked_subgraph,
                                               const InlinedHashMap<OrtValueName, OrtDevice>& outer_scope_node_arg_to_location_map,
                                               bool graph_info_already_created) {
   if (!graph_info_already_created) {
@@ -1660,7 +1660,7 @@ Status SessionState::FinalizeSessionStateImpl(const std::basic_string<PATH_CHAR_
                                                                subgraph_session_state.GetGraphViewer(),
                                                                subgraph_outer_scope_node_arg_to_location_map));
 
-      auto& next_prepacked_subgraph = prepacked_subgraph.GetOrCreateSubgraph(
+      auto& next_prepacked_subgraph = prepacked_subgraph.GetOrCreateSubgraphEntry(
           subgraph_session_state.GetGraphViewer().GetGraph());
       ORT_RETURN_IF_ERROR(subgraph_session_state.FinalizeSessionStateImpl(
           graph_location, kernel_registry_manager, &node, subgraph_session_options, remove_initializers,

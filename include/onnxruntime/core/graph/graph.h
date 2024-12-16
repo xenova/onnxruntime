@@ -1501,10 +1501,27 @@ class Graph {  // NOLINT(clang-analyzer-optin.performance.Padding): preserve exi
   /// </summary>
   using WeightToPrePacksMap = NodeHashMap<std::string, InlinedHashSet<std::string>>;
 
+  /// <summary>
+  /// This function traverses the graph bottom up and externalizes
+  /// constant initializers along with their pre-packed blobs from different
+  /// kernels. Writes constant initializers to the external file with any pre-packed
+  /// blobs (if enabled and produced for this initializer) and then modifies TensorProto
+  /// entry with external data references.
+  /// </summary>
+  /// <param name="model_path">model file path from Model</param>
+  /// <param name="external_file_path">a binary file path for relative to the model file path
+  /// where the initializers data is written</param>
+  /// <param name="model_external_file_path">model file folder path with external file path appended</param>
+  /// <param name="model_saving_options">model saving options including alignment and pre-packs</param>
+  /// <param name="unprocessed_prepacks"></param>
+  /// <param name="output_graph_proto">The graph proto to be modified</param>
+  /// <param name="external_stream">external file stream</param>
+  /// <param name="external_offset">current external file offset updated with each write</param>
+  /// <returns>Status instance</returns>
   Status ToGraphProtoWithExternalInitiallizersImpl(
       const std::filesystem::path& model_path,
       const std::filesystem::path& external_file_path,
-      const std::filesystem::path& modified_external_file_path,
+      const std::filesystem::path& model_external_file_path,
       const ModelSavingOptions& model_saving_options,
       WeightToPrePacksMap& unprocessed_prepacks,
       ONNX_NAMESPACE::GraphProto& graph_proto,

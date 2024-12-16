@@ -40,7 +40,7 @@ TEST(TensorProtoUtilsTest, SetExternalDataInformation) {
   ASSERT_EQ(tensor_proto.external_data(2).key(), "length");
   ASSERT_EQ(tensor_proto.external_data(2).value(), std::to_string(init_length));
 
-  PrepackedForSerialization prepacked_for_serialization;
+  PrepackedShareableWeightsContainer prepacked_for_serialization;
   prepacked_for_serialization.SetSaveMode(true);
   PrePackedWeights prepacked_weights;
   const std::string init_name = "test_initializer";
@@ -60,7 +60,7 @@ TEST(TensorProtoUtilsTest, SetExternalDataInformation) {
   constexpr const int64_t starting_offset = 300;
   int64_t external_offset = starting_offset;
   std::stringstream ss;
-  const auto* blobs_for_weight = prepacked_for_serialization.MainGraph().GetBlobsForWeight(init_name);
+  const auto* blobs_for_weight = prepacked_for_serialization.MainGraph().GetKeysForWeightForSaving(init_name);
   ASSERT_TRUE(blobs_for_weight != nullptr);
   InlinedHashSet<std::string> blob_keys{blobs_for_weight->begin(), blobs_for_weight->end()};
   ASSERT_TRUE(ExternalDataInfo::WritePrepackedToFileAndAddToProto(prepacked_for_serialization,

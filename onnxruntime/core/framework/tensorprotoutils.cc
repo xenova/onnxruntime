@@ -994,7 +994,7 @@ Status GetExtDataFromTensorProto(const Env& env, const std::filesystem::path& mo
                                  const ONNX_NAMESPACE::TensorProto& tensor_proto, void*& ext_data_buf,
                                  SafeInt<size_t>& ext_data_len, OrtCallback& ext_data_deleter,
                                  Tensor* buffered_tensor,
-                                 PrepackedForSerialization::Subgraph* prepacked_info) {
+                                 PrepackedShareableWeightsContainer::WeightsForGraph* prepacked_info) {
   ORT_ENFORCE(utils::HasExternalData(tensor_proto));
   std::basic_string<ORTCHAR_T> tensor_proto_dir;
   if (!model_path.empty()) {
@@ -1064,7 +1064,7 @@ Status GetExtDataFromTensorProto(const Env& env, const std::filesystem::path& mo
           const auto blob_length = std::get<1>(blob);
           SafeInt<FileOffsetType> end_of_blob{blob_offset};
           end_of_blob += blob_length;
-          ORT_RETURN_IF(blob_offset < 0 || static_cast<std::uintmax_t>(end_of_blob) > file_length,
+          ORT_RETURN_IF(blob_offset < 0 || static_cast<uintmax_t>(end_of_blob) > file_length,
                         "Pre-packed blob: ", key, " offset: ", blob_offset, " file_length: ", file_length,
                         " is out of bounds and can not read in full");
           void* data_ptr;
@@ -1076,7 +1076,7 @@ Status GetExtDataFromTensorProto(const Env& env, const std::filesystem::path& mo
           prepacked_weights.buffer_sizes_.push_back(blob_length);
         }
         if (!blobs.empty()) {
-          prepacked_info->InsertFromDisk(key, std::move(prepacked_weights));
+          prepacked_info->InsertPrepackedWeights(key, std::move(prepacked_weights));
         }
       }
     }

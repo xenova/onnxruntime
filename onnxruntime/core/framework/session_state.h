@@ -374,7 +374,7 @@ class SessionState {
   void SetSaveModeForPrepacks(bool saving_model,
                               bool saving_ort_format);
 
-  const PrepackedForSerialization& GetPrepackedForSerialization() const {
+  const PrepackedShareableWeightsContainer& GetPrepackedForSerialization() const {
     return prepacked_weights_for_serialization_;
   }
 
@@ -395,7 +395,7 @@ class SessionState {
    * Prepack the constant initialized tensors for better performance.
    * The original constant initialized tensors will be removed to save memory.
    */
-  Status PrepackConstantInitializedTensors(PrepackedForSerialization::Subgraph& prepacked_subgraph,
+  Status PrepackConstantInitializedTensors(PrepackedShareableWeightsContainer::WeightsForGraph& prepacked_subgraph,
                                            InlinedHashMap<std::string, size_t>& constant_initializers_use_count,
                                            const std::unordered_map<std::string, const OrtValue*>& initializers_to_share_map);
 
@@ -415,7 +415,7 @@ class SessionState {
                                   const SessionOptions& session_options,
                                   bool remove_initializers,
                                   InlinedHashMap<std::string, size_t>& constant_initializers_use_count,
-                                  PrepackedForSerialization::Subgraph& prepacked_subgraph,
+                                  PrepackedShareableWeightsContainer::WeightsForGraph& prepacked_subgraph,
                                   const InlinedHashMap<OrtValueName, OrtDevice>& outer_scope_node_arg_to_location_map = {},
                                   bool graph_info_already_created = false);
 
@@ -545,8 +545,8 @@ class SessionState {
   // prepacked_weights_container_ can be nullptr if no caching is required for prepacked weights
   PrepackedWeightsContainer* const prepacked_weights_container_{};
   // This container serves either for reading and using pre-packed weights from disk
-  // of serializing to disk
-  PrepackedForSerialization prepacked_weights_for_serialization_;
+  // or serializing to disk if enabled.
+  PrepackedShareableWeightsContainer prepacked_weights_for_serialization_;
 
 #ifdef ENABLE_TRAINING
 // Needed for ORTTrainer. Should be removed along with ORTTrainer code

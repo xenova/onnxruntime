@@ -117,7 +117,7 @@ void ExternalDataInfo::SetExternalLocationToProto(const std::filesystem::path& e
 }
 
 std::ostream& ExternalDataInfo::WritePrepackedToFileAndAddToProto(
-    const PrepackedForSerialization& prepacked_for_serialization,
+    const PrepackedShareableWeightsContainer& prepacked_for_serialization,
     const InlinedHashSet<std::string>& blob_keys, bool align, int64_t allocation_granularity,
     std::ostream& os, int64_t& external_offset, ::ONNX_NAMESPACE::TensorProto& proto) {
   for (const auto& key : blob_keys) {

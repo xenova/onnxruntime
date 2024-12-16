@@ -4086,17 +4086,20 @@ ONNX_NAMESPACE::GraphProto Graph::ToGraphProto() const {
   return result;
 }
 
-// A recursive function that does bottom up with subgraphs
 Status Graph::ToGraphProtoWithExternalInitiallizersImpl(
     const std::filesystem::path& model_path,
     const std::filesystem::path& external_file_path,
-    const std::filesystem::path& modified_external_file_path,
+    const std::filesystem::path& model_external_file_path,
     const ModelSavingOptions& model_saving_options,
     WeightToPrePacksMap& unprocessed_prepacks,
     ONNX_NAMESPACE::GraphProto& output_graph_proto,
     std::ostream& external_stream,
     int64_t& external_offset) const {
-  // Process subgraphs
+  // Process initializers in a subgraph, check their size and
+  // write to an external file. This function also saves pre-packed
+  // blobs for the initializer being saved to disk, if the initializer has any pre-packs.
+  // This function is invoked by ToGraphProtoWithExternalInitiallizers() and processes subgraphs
+  // bottom up.
   for (const auto& node : Nodes()) {
     if (node.ContainsSubgraph()) {
       // Let find this node in the output_graph_proto
@@ -4118,11 +4121,12 @@ Status Graph::ToGraphProtoWithExternalInitiallizersImpl(
                                       return proto.name() == name;
                                     });
         ORT_RETURN_IF_NOT(sub_hit != result_node.mutable_attribute()->end() && utils::HasGraph(*sub_hit),
-                          "Subgraph ", name, " not found in node ", node.Name());
+                          "Subgraph ", name, " is referred to in GetAttributeNameToSubgraphMap, but not found in node ",
+                          node.Name(), " while attempting to recurse into it.");
         auto& result_subgraph = *sub_hit->mutable_g();
         ORT_RETURN_IF_ERROR(subgraph->ToGraphProtoWithExternalInitiallizersImpl(
             model_path, external_file_path,
-            modified_external_file_path, model_saving_options,
+            model_external_file_path, model_saving_options,
             unprocessed_prepacks, result_subgraph,
             external_stream, external_offset));
       }
@@ -4131,7 +4135,7 @@ Status Graph::ToGraphProtoWithExternalInitiallizersImpl(
 
   // Used only when pre-packed weights are serialized
   InlinedHashSet<std::string> processed_weights;
-  const PrepackedForSerialization::Subgraph* prepacked_subgraph = nullptr;
+  const PrepackedShareableWeightsContainer::WeightsForGraph* prepacked_subgraph = nullptr;
   bool process_prepacks = false;
   if (model_saving_options.prepacked_for_save != nullptr) {
     // Is there any pre-packed weights for this subgraph?
@@ -4176,11 +4180,11 @@ Status Graph::ToGraphProtoWithExternalInitiallizersImpl(
                                                    model_saving_options.align_threshold) {
         ORT_RETURN_IF_NOT(ExternalDataInfo::AlignAndPad(external_stream, model_saving_options.allocation_granularity,
                                                         external_offset),
-                          "Failed writing external data to: ", modified_external_file_path);
+                          "Failed writing external data to: ", model_external_file_path);
       }
 
       ORT_RETURN_IF_NOT(external_stream.write(reinterpret_cast<const char*>(raw_data.data()), tensor_bytes_size),
-                        "Failed to write external initializers to file: ", modified_external_file_path);
+                        "Failed to write external initializers to file: ", model_external_file_path);
 
       ExternalDataInfo::SetExternalLocationToProto(external_file_path, external_offset,
                                                    tensor_bytes_size, *output_proto);
@@ -4204,7 +4208,7 @@ Status Graph::ToGraphProtoWithExternalInitiallizersImpl(
         }
 
         // See if this weight has any pre-prepacks referred to in this graph.
-        const auto* blobs_keys_for_weight = prepacked_subgraph->GetBlobsForWeight(initializer.name());
+        const auto* blobs_keys_for_weight = prepacked_subgraph->GetKeysForWeightForSaving(initializer.name());
         if (blobs_keys_for_weight != nullptr && !blobs_keys_for_weight->empty()) {
           // Add all the blob_keys to the set of keys to process
           blob_keys_to_external_data.insert(blobs_keys_for_weight->begin(), blobs_keys_for_weight->end());
