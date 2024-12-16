@@ -10,8 +10,8 @@ namespace onnxruntime {
 PrePackedWeights PrePackedWeights::CreateReferringCopy() const {
   PrePackedWeights copy;
   for (const auto& prepacked_buffer : buffers_) {
-    // BufferDeleter is nullptr because we do not own the data in this case
-    copy.buffers_.emplace_back(prepacked_buffer.get(), BufferDeleter(nullptr));
+    // No deleter is needed as the buffer is not owned by the unique_ptr
+    copy.buffers_.emplace_back(prepacked_buffer.get(), [](void*) {});
   }
 
   copy.buffer_sizes_ = buffer_sizes_;
