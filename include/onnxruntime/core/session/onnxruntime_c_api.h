@@ -5006,26 +5006,33 @@ struct OrtGraphApi {
   // Create session.
   // The OrtModel does not transfer ownership to allow multiple sessions to be created.
   // Once the session is created it can be released at any time.
-  // TBD is this re-using a model is needed. If not we could transfer ownership and automatically release the OrtModel
-  // once the session is created.
+  // TBD if re-using a model is needed.
+  // If not we could transfer ownership and automatically release the OrtModel once the session is created.
   ORT_API2_STATUS(CreateSessionFromModel, _In_ const OrtEnv* env, _In_ const OrtModel* model,
                   _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out);
 
-  // TODO: How best to support creating a session with a mutable Model?
+  // TODO: How best to support creating a session with an existing model and allowing updates to it?
   //
-  // We need to be able to update the opsets.
-  // We need to return an OrtModel with the OrtGraph populated.
-  //   - we don't need to create instances for all the nodes and initializers though. user can add nodes and adjust
-  //     inputs/outputs but not edit the initial graph.
+  // We need to be able to update the opsets
+  //   - e.g. adding pre-processing might involve a new opset for contrib ops
+  // We need to be able to read the current opsets
+  //   - any new nodes must conform to the opset/s used in the loaded model
+  // We need to be able to get an OrtModel with the OrtGraph populated from the existing model.
+  //   - we don't need to create instances for all the nodes and initializers. user can add nodes and adjust
+  //     graph inputs/outputs but not edit the initial graph to keep things simple.
   //
   // If we add something to OrtSessionOptions the existing APIs could be used
-  //  - based on flag, skip the call to InitializeSession
-  //  - that will leave the OrtSession in an invalid state
+  //  - based on flag in session options, skip the call to InitializeSession in CreateSession
+  //    - that will leave the OrtSession in an invalid state
   //  - add function to get OrtModel from session
   //  - add function to augment the onnxruntime::Graph and finalize the session
   //    - can share implementation details with Graph::LoadFromGraphApiModel
   ORT_API2_STATUS(GetModelFromSession, _In_ OrtSession* session, _Outptr_ OrtModel** model);
-  ORT_API2_STATUS(FinalizeSessionWithModel, _In_ OrtSession* session, _In_ OrtModel* model);
+  ORT_API2_STATUS(GetOpsetFromModel, _In_ const OrtModel* model, _In_ const char* domain_name, int* opset_version);
+  ORT_API2_STATUS(UpdateSessionWithModel, _In_ OrtSession* session, _In_ OrtModel* model,
+                  _In_reads_(additional_opset_entries_len) const char* const* additional_domain_names,
+                  _In_reads_(additional_opset_entries_len) const int* additional_opset_versions,
+                  _In_ size_t additional_opset_entries_len);
 };
 
 /*
