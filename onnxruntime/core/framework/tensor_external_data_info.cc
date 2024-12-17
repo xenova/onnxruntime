@@ -117,12 +117,12 @@ void ExternalDataInfo::SetExternalLocationToProto(const std::filesystem::path& e
 }
 
 std::ostream& ExternalDataInfo::WritePrepackedToFileAndAddToProto(
-    const PrepackedShareableWeightsContainer& prepacked_for_serialization,
+    const PrepackedWeightsForGraph& prepacked_for_graph,
     const InlinedHashSet<std::string>& blob_keys, bool align, int64_t allocation_granularity,
     std::ostream& os, int64_t& external_offset, ::ONNX_NAMESPACE::TensorProto& proto) {
   for (const auto& key : blob_keys) {
     size_t prepack_count = 0;
-    const auto* prepacked_weights = prepacked_for_serialization.GetPrepackedForKey(key);
+    const auto* prepacked_weights = prepacked_for_graph.GetPrepackedWeights(key);
     ORT_ENFORCE(prepacked_weights != nullptr, "Prepacked weights not found for key ", key);
     std::stringstream prepacked_entry;
     prepacked_entry << key << "|";

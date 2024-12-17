@@ -1545,6 +1545,17 @@ Status Graph::VerifyNoDuplicateName() {
 
 #endif  // !defined(ORT_MINIMAL_BUILD)
 
+void Graph::ConstructPrepackedSharedContainerAndSetMode(bool saving_mode_one) {
+  if (parent_graph_ == nullptr) {
+    prepacked_key_to_blobs_.emplace();
+    prepacked_weights_for_graph_.emplace(*prepacked_key_to_blobs_, saving_mode_one);
+  } else {
+    // Subgraph
+    prepacked_weights_for_graph_.emplace(parent_graph_->prepacked_weights_for_graph_->GetKeyToBlob(),
+                                         saving_mode_one);
+  }
+}
+
 #if !defined(ORT_MINIMAL_BUILD) || defined(ORT_EXTENDED_MINIMAL_BUILD)
 void Graph::AddEdge(NodeIndex src_node_index, NodeIndex dst_node_index, int src_arg_slot, int dst_arg_slot) {
   if (nodes_.size() <= src_node_index || src_arg_slot < 0 || nodes_.size() <= dst_node_index || dst_arg_slot < 0 ||
@@ -4091,7 +4102,6 @@ Status Graph::ToGraphProtoWithExternalInitiallizersImpl(
     const std::filesystem::path& external_file_path,
     const std::filesystem::path& model_external_file_path,
     const ModelSavingOptions& model_saving_options,
-    WeightToPrePacksMap& unprocessed_prepacks,
     ONNX_NAMESPACE::GraphProto& output_graph_proto,
     std::ostream& external_stream,
     int64_t& external_offset) const {
@@ -4127,7 +4137,7 @@ Status Graph::ToGraphProtoWithExternalInitiallizersImpl(
         ORT_RETURN_IF_ERROR(subgraph->ToGraphProtoWithExternalInitiallizersImpl(
             model_path, external_file_path,
             model_external_file_path, model_saving_options,
-            unprocessed_prepacks, result_subgraph,
+            result_subgraph,
             external_stream, external_offset));
       }
     }
@@ -4135,15 +4145,9 @@ Status Graph::ToGraphProtoWithExternalInitiallizersImpl(
 
   // Used only when pre-packed weights are serialized
   InlinedHashSet<std::string> processed_weights;
-  const PrepackedShareableWeightsContainer::WeightsForGraph* prepacked_subgraph = nullptr;
-  bool process_prepacks = false;
-  if (model_saving_options.prepacked_for_save != nullptr) {
-    // Is there any pre-packed weights for this subgraph?
-    prepacked_subgraph = model_saving_options.prepacked_for_save->FindPrepackedGraph(*this);
-    if (prepacked_subgraph != nullptr) {
-      processed_weights.reserve(graph_proto_->initializer_size());
-      process_prepacks = true;
-    }
+  const bool process_prepacks = prepacked_weights_for_graph_->GetNumberOfWeightsForWriting() > 0;
+  if (process_prepacks) {
+    processed_weights.reserve(graph_proto_->initializer_size());
   }
 
   // Add the initializers to the result graph.
@@ -4196,19 +4200,14 @@ Status Graph::ToGraphProtoWithExternalInitiallizersImpl(
       }
       output_proto->set_doc_string(initializer.doc_string());
 
-      external_offset += tensor_bytes_size;
+      external_offset = SafeInt<int64_t>(external_offset) + tensor_bytes_size;
 
       if (process_prepacks) {
         // check if this weight was referred to in subgraphs
         InlinedHashSet<std::string> blob_keys_to_external_data;
-        auto hit = unprocessed_prepacks.find(initializer.name());
-        if (hit != unprocessed_prepacks.end()) {
-          blob_keys_to_external_data = std::move(hit->second);
-          unprocessed_prepacks.erase(hit);
-        }
 
         // See if this weight has any pre-prepacks referred to in this graph.
-        const auto* blobs_keys_for_weight = prepacked_subgraph->GetKeysForWeightForSaving(initializer.name());
+        const auto* blobs_keys_for_weight = prepacked_weights_for_graph_->GetKeysForWeightForSaving(initializer.name());
         if (blobs_keys_for_weight != nullptr && !blobs_keys_for_weight->empty()) {
           // Add all the blob_keys to the set of keys to process
           blob_keys_to_external_data.insert(blobs_keys_for_weight->begin(), blobs_keys_for_weight->end());
@@ -4216,7 +4215,7 @@ Status Graph::ToGraphProtoWithExternalInitiallizersImpl(
 
         if (!blob_keys_to_external_data.empty()) {
           auto& os = ExternalDataInfo::WritePrepackedToFileAndAddToProto(
-              *model_saving_options.prepacked_for_save, blob_keys_to_external_data,
+              *prepacked_weights_for_graph_, blob_keys_to_external_data,
               model_saving_options.align_offset,
               model_saving_options.allocation_granularity,
               external_stream, external_offset, *output_proto);
@@ -4232,13 +4231,11 @@ Status Graph::ToGraphProtoWithExternalInitiallizersImpl(
   }
 
   // Check if there are any pre-packed weights this graph refers to, but they have
-  // not been processed
+  // not been processed.
   if (process_prepacks) {
-    const auto& sorted_by_weights = prepacked_subgraph->GetSortedByWeightForWriting();
+    const auto& sorted_by_weights = prepacked_weights_for_graph_->GetWeightToPrepack();
     for (const auto& [weight_name, blob_keys] : sorted_by_weights) {
-      if (processed_weights.find(weight_name) == processed_weights.end()) {
-        unprocessed_prepacks[weight_name].insert(blob_keys.begin(), blob_keys.end());
-      }
+      ORT_ENFORCE(processed_weights.find(weight_name) != processed_weights.end());
     }
   }
 
@@ -4262,19 +4259,13 @@ ONNX_NAMESPACE::GraphProto Graph::ToGraphProtoWithExternalInitializers(
   ORT_ENFORCE(external_stream.is_open(), "Failed to open for writing:", modified_external_file_path);
   int64_t external_offset = 0;
 
-  WeightToPrePacksMap unprocessed_prepacks;
   ORT_THROW_IF_ERROR(ToGraphProtoWithExternalInitiallizersImpl(model_path, external_file_path,
                                                                modified_external_file_path, model_saving_options,
-                                                               unprocessed_prepacks, result,
+                                                               result,
                                                                external_stream, external_offset));
 
   if (!external_stream.flush()) {
     ORT_THROW("Failed to flush file with external initializers: ", modified_external_file_path);
-  }
-
-  if (!unprocessed_prepacks.empty()) {
-    ORT_THROW("BUG. Failed to process all of them pre-packed weights for outerscope external initializers: ",
-              modified_external_file_path);
   }
 
   return result;

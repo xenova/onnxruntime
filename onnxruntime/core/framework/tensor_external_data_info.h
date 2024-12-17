@@ -65,7 +65,7 @@ class ExternalDataInfo {
   }
 
   static std::ostream& WritePrepackedToFileAndAddToProto(
-      const PrepackedShareableWeightsContainer& prepacked_for_serialization,
+      const PrepackedWeightsForGraph& prepacked_for_graph,
       const InlinedHashSet<std::string>& blob_keys,
       bool align, int64_t allocation_granularity,
       std::ostream& os,

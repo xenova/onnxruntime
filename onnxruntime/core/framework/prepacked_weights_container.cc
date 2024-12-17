@@ -73,8 +73,8 @@ void PrepackedShareableWeightsContainer::WeightsForGraph::InsertPrepackedWeights
   key_to_blobs_.emplace(key, std::move(packed_weight));
 }
 
-void PrepackedShareableWeightsContainer::WeightsForGraph::WritePacked(const std::string& weight_name, const std::string& key,
-                                                                      PrePackedWeights&& packed_weight) {
+void PrepackedShareableWeightsContainer::WeightsForGraph::WritePackedMaybeForSave(const std::string& weight_name, const std::string& key,
+                                                                                  PrePackedWeights&& packed_weight) {
   auto hit = key_to_blobs_.find(key);
   if (hit == key_to_blobs_.end()) {
     // new key
@@ -142,6 +142,52 @@ const PrepackedShareableWeightsContainer::WeightsForGraph* PrepackedShareableWei
     parent = parent->GetSubgraph(graph);
   }
   return parent;
+}
+
+void PrepackedWeightsForGraph::InsertPrepackedWeights(const std::string& key, PrePackedWeights&& packed_weight) {
+  // We may have duplicate entries mapped from disk if the same weight is pre-packed from subgraphs and
+  // up the tree by the same kernel with the same result. The map prevents this from happening.
+  key_to_blobs_.emplace(key, std::move(packed_weight));
+}
+
+void PrepackedWeightsForGraph::WritePackedMaybeForSave(const std::string& weight_name, const std::string& key,
+                                                       PrePackedWeights&& packed_weight) {
+  auto result = key_to_blobs_.insert_or_assign(key, std::move(packed_weight));
+
+  if (save_mode_on_) {
+    weight_prepacks_for_saving_[weight_name].insert(key);
+  }
+}
+
+const PrePackedWeights* PrepackedWeightsForGraph::GetPrepackedWeights(const std::string& key) const {
+  auto it = key_to_blobs_.find(key);
+  if (it == key_to_blobs_.end()) {
+    return nullptr;
+  }
+  return &it->second;
+}
+
+std::optional<PrePackedWeights> PrepackedWeightsForGraph::ReplaceWithReferenceIfSaving(
+    const std::string& weight_name,
+    const std::string& key,
+    const PrePackedWeights& refer_if_absent) {
+  auto it = key_to_blobs_.find(key);
+  if (it == key_to_blobs_.end()) {
+    if (save_mode_on_) {
+      key_to_blobs_.emplace(key, refer_if_absent.CreateReferringCopy());
+      weight_prepacks_for_saving_[weight_name].insert(key);
+    }
+    return std::nullopt;
+  }
+
+  PrePackedWeights result = std::move(it->second);
+  if (save_mode_on_) {
+    it->second = result.CreateReferringCopy();
+    weight_prepacks_for_saving_[weight_name].insert(key);
+  } else {
+    key_to_blobs_.erase(it);
+  }
+  return result;
 }
 
 }  // namespace onnxruntime

@@ -5,7 +5,7 @@
 
 namespace onnxruntime {
 
-class PrepackedShareableWeightsContainer;
+class PrepackedWeightsForGraph;
 
 // These options affect how the model initializers are written to the external file.
 // This includes options to align external initializer offset.
@@ -42,7 +42,7 @@ struct ModelSavingOptions {
   // Optional pointer to a container of pre-packed initializers to be
   // embedded into the external initializers, so they can also be loaded
   // from disk.
-  const PrepackedShareableWeightsContainer* prepacked_for_save = nullptr;
+  const PrepackedWeightsForGraph* prepacked_weights_main_graph_ = nullptr;
 };
 
 }  // namespace onnxruntime

@@ -994,7 +994,7 @@ Status GetExtDataFromTensorProto(const Env& env, const std::filesystem::path& mo
                                  const ONNX_NAMESPACE::TensorProto& tensor_proto, void*& ext_data_buf,
                                  SafeInt<size_t>& ext_data_len, OrtCallback& ext_data_deleter,
                                  Tensor* buffered_tensor,
-                                 PrepackedShareableWeightsContainer::WeightsForGraph* prepacked_info) {
+                                 PrepackedWeightsForGraph* prepacked_info) {
   ORT_ENFORCE(utils::HasExternalData(tensor_proto));
   std::basic_string<ORTCHAR_T> tensor_proto_dir;
   if (!model_path.empty()) {
