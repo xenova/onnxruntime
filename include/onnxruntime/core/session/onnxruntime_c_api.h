@@ -4784,6 +4784,21 @@ struct OrtApi {
 
   // Get the OrtGraphApi instance for creating a model dynamically.
   const OrtGraphApi*(ORT_API_CALL* GetGraphApi)();
+
+  // Create TypeInfo for editing.
+  //
+  ORT_API2_STATUS(CreateTypeInfo, _In_ enum ONNXType onnx_type, _Out_ OrtTypeInfo** type_info);
+  ORT_API2_STATUS(CloneTypeInfo, _In_ const OrtTypeInfo* src_type_info, _Out_ OrtTypeInfo** copied_type_info);
+
+  // Mutable getter. Can we used for Tensor or SparseTensor
+  ORT_API2_STATUS(GetMutableTensorInfoFromTypeInfo, _In_ OrtTypeInfo* type_info,
+                  _Outptr_result_maybenull_ OrtTensorTypeAndShapeInfo** tensor_info);
+  ORT_API2_STATUS(GetMutableMapInfoFromTypeInfo, _In_ OrtTypeInfo* type_info,
+                  _Outptr_result_maybenull_ OrtMapTypeInfo** map_info);
+  ORT_API2_STATUS(GetMutableSequenceInfoFromTypeInfo, _In_ OrtTypeInfo* type_info,
+                  _Outptr_result_maybenull_ OrtSequenceTypeInfo** tensor_info);
+  ORT_API2_STATUS(GetMutableOptionalInfoFromTypeInfo, _In_ OrtTypeInfo* type_info,
+                  _Outptr_result_maybenull_ OrtOptionalTypeInfo** tensor_info);
 };
 
 /*
@@ -4904,63 +4919,34 @@ struct OrtCustomOp {
 ORT_RUNTIME_CLASS(Model);
 ORT_RUNTIME_CLASS(Graph);
 ORT_RUNTIME_CLASS(Node);
-ORT_RUNTIME_CLASS(Shape);      // Shape to enable support for dynamic shapes in the future
-ORT_RUNTIME_CLASS(ValueInfo);  // could be Tensor if we don't think we ever need to support non-tensor types
 
-// TODO: Should we prefer ownership transfer (possible double free on misuse) or require the user to manage the
-// lifetime (possible invalidation of memory if done at the wrong time, or leak if not done)?
-// If we expect the C++ API to be the primary API, the former might be a better fit.
-// We could use _Inout_ to indicate ownership transfer, and set the input to nullptr after the call to make any
-// misuse obvious to the developer calling the API during development.
 struct OrtGraphApi {
-  // Option A:
-  // - Allows the API usage to be more natural as it's not dictated by the current implementation of the ORT C++
-  //     classes
-  //   - Uses intermediate structs to build the model
-  //   - Converts to onnxruntime C++ classes at the end
-  //   - Less efficient to use intermediate classes
-  //
-  // General setup for the types is Create/Modify/Add or Release. Ownership transfers with Add
+  /*** New usage ***
+  Create OrtTypeInfo for Tensor input:
+      CreateTypeInfo
+      GetMutableTensorInfoFromTypeInfo
+      SetTensorElementType
+      SetDimensions + SetSymbolicDimensions to define shape (these are complimentary and overlap)
 
-  // Standalone Graph. needs interface struct to hold info with conversion to the C++ types when everything
-  // is complete. can create a subgraph more directly but requires interface structs to hold all the model info with
-  // copy to the C++ types at the end.
-
-  //
-  // Shape related APIs
-  //
-
-  ORT_API2_STATUS(CreateFixedShape, _In_ const int64_t* dim_values, size_t dim_count, _Outptr_ OrtShape** shape);
-  ORT_API2_STATUS(CreateShape, _Outptr_ OrtShape** shape);
-  ORT_API2_STATUS(AddDimension, _In_ OrtShape* shape, int64_t dim_value);
-  ORT_API2_STATUS(AddDynamicDimension, _In_ OrtShape* shape, const char* dimension_name);
-  ORT_CLASS_RELEASE(Shape);  // call if not added to ValueInfo
-
-  //
-  // ValueInfo APIs (for graph inputs/outputs)
-  //
-
-  // start with Tensor only. add helpers for other types as needed. ValueInfo takes ownership of the Shape.
-  // ValueInfo takes ownership of `shape` input.
-  ORT_API2_STATUS(CreateTensorValueInfo, _In_ const char* name, _In_ ONNXTensorElementDataType type,
-                  _Inout_ OrtShape** shape, _Outptr_ OrtValueInfo** value_info);
-  ORT_CLASS_RELEASE(ValueInfo);  // call if not added to Graph
+  Read from OrtTypeInfo:
+      GetOnnxTypeFromTypeInfo
+      CastTypeInfoToTensorInfo for tensor/sparse tensor
+      GetTensorElementType
+      GetDimensionsCount
+      GetDimensions, GetSymbolicDimensions
+      GetTensorShapeElementCount can be used to infer fixed or dynamic shape
+  ***/
 
   //
   // Node APIs
   //
 
   // Create attributes with CreateOpAttr.
-  // Node takes ownership of OrtOpAttr instances if provided.
-  // Technically we could have an AddNode function that creates and adds the node to the Graph class in one,
-  // but a CreateNode function makes all the APIs more consistent in their usage (Create/Modify/Add or Release) and
-  // allows operations between the Create and Add as needed.
-  // NOTE: `attributes` is an array of OrtOpAttr**. The value pointed to by an entry in the array will be set
-  //       to nullptr if ownership transfers.
+  // Node takes ownership of any OrtOpAttr instances provided.
   ORT_API2_STATUS(CreateNode, _In_ const char* operator_name, const char* domain_name, _In_ const char* node_name,
                   _In_reads_(input_names_len) const char* const* input_names, size_t input_names_len,
                   _In_reads_(output_names_len) const char* const* output_names, size_t output_names_len,
-                  _In_reads_(attribs_len) _Inout_opt_ OrtOpAttr*** attributes, _In_opt_ size_t attribs_len,
+                  _In_reads_(attribs_len) _In_opt_ OrtOpAttr** attributes, _In_ size_t attribs_len,
                   _Outptr_ OrtNode** node);
   ORT_CLASS_RELEASE(Node);  // call if not added to Graph
 
@@ -4969,8 +4955,19 @@ struct OrtGraphApi {
   //
 
   ORT_API2_STATUS(CreateGraph, _Outptr_ OrtGraph** graph);
-  ORT_API2_STATUS(AddInput, _In_ OrtGraph* graph, _Inout_ OrtValueInfo** value_info);
-  ORT_API2_STATUS(AddOutput, _In_ OrtGraph* graph, _Inout_ OrtValueInfo** value_info);
+
+  // Set the Inputs/Outputs. Replaces and frees any existing inputs/outputs.
+  // Graph takes ownership of the OrtTypeInfo instances.
+  ORT_API2_STATUS(SetInputs, _In_ OrtGraph* graph,
+                  _In_reads_(inputs_len) _In_ OrtTypeInfo** inputs, _In_ size_t inputs_len);
+  ORT_API2_STATUS(SetOutputs, _In_ OrtGraph* graph,
+                  _In_reads_(outputs_len) _In_ OrtTypeInfo** outputs, _In_ size_t outputs_len);
+
+  // Get current inputs/outputs. Expected usage is augmenting an existing graph.
+  // To change the inputs/outputs, use CloneTypeInfo for any OrtTypeInfo instances you want to keep, use CreateTypeInfo
+  // to create new inputs/outputs, and call SetInputs/SetOutputs with the new instances.
+  ORT_API2_STATUS(GetInputs, _In_ OrtGraph* graph, _Inout_ const OrtTypeInfo** inputs, _Out_ size_t* inputs_len);
+  ORT_API2_STATUS(GetOutputs, _In_ OrtGraph* graph, _Inout_ const OrtTypeInfo** outputs, _Out_ size_t* outputs_len);
 
   // 2 use cases. User is free to choose either approach but the suggested usage would be:
   //
@@ -5013,6 +5010,22 @@ struct OrtGraphApi {
   // once the session is created.
   ORT_API2_STATUS(CreateSessionFromModel, _In_ const OrtEnv* env, _In_ const OrtModel* model,
                   _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out);
+
+  // TODO: How best to support creating a session with a mutable Model?
+  //
+  // We need to be able to update the opsets.
+  // We need to return an OrtModel with the OrtGraph populated.
+  //   - we don't need to create instances for all the nodes and initializers though. user can add nodes and adjust
+  //     inputs/outputs but not edit the initial graph.
+  //
+  // If we add something to OrtSessionOptions the existing APIs could be used
+  //  - based on flag, skip the call to InitializeSession
+  //  - that will leave the OrtSession in an invalid state
+  //  - add function to get OrtModel from session
+  //  - add function to augment the onnxruntime::Graph and finalize the session
+  //    - can share implementation details with Graph::LoadFromGraphApiModel
+  ORT_API2_STATUS(GetModelFromSession, _In_ OrtSession* session, _Outptr_ OrtModel** model);
+  ORT_API2_STATUS(FinalizeSessionWithModel, _In_ OrtSession* session, _In_ OrtModel* model);
 };
 
 /*
