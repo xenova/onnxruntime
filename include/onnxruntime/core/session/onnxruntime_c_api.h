@@ -4788,7 +4788,6 @@ struct OrtApi {
   // Create TypeInfo for editing.
   //
   ORT_API2_STATUS(CreateTypeInfo, _In_ enum ONNXType onnx_type, _Out_ OrtTypeInfo** type_info);
-  ORT_API2_STATUS(CloneTypeInfo, _In_ const OrtTypeInfo* src_type_info, _Out_ OrtTypeInfo** copied_type_info);
 
   // Mutable getter. Can we used for Tensor or SparseTensor
   ORT_API2_STATUS(GetMutableTensorInfoFromTypeInfo, _In_ OrtTypeInfo* type_info,
@@ -4919,6 +4918,7 @@ struct OrtCustomOp {
 ORT_RUNTIME_CLASS(Model);
 ORT_RUNTIME_CLASS(Graph);
 ORT_RUNTIME_CLASS(Node);
+ORT_RUNTIME_CLASS(ValueInfo);
 
 struct OrtGraphApi {
   /*** New usage ***
@@ -4935,7 +4935,17 @@ struct OrtGraphApi {
       GetDimensionsCount
       GetDimensions, GetSymbolicDimensions
       GetTensorShapeElementCount can be used to infer fixed or dynamic shape
+
+  Call CreateValueInfo to combine value name with OrtTypeInfo
   ***/
+
+  // OrtValueInfo takes ownership of the OrtTypeInfo
+  ORT_API2_STATUS(CreateValueInfo, _In_ const char* name, _In_ OrtTypeInfo* type_info,
+                  _Outptr_ OrtValueInfo** value_info);
+  ORT_API2_STATUS(GetValueInfoName, _In_ const OrtValueInfo* value_info, _Out_ const char** name);
+  ORT_API2_STATUS(GetValueInfoTypeInfo, _In_ const OrtValueInfo* value_info, _Outptr_ const OrtTypeInfo** type_info);
+  ORT_API2_STATUS(CloneValueInfo, _In_ const OrtValueInfo* src_value_info, _Out_ OrtValueInfo** new_value_info);
+  ORT_CLASS_RELEASE(ValueInfo);  // call if not added to Graph
 
   //
   // Node APIs
@@ -4959,15 +4969,16 @@ struct OrtGraphApi {
   // Set the Inputs/Outputs. Replaces and frees any existing inputs/outputs.
   // Graph takes ownership of the OrtTypeInfo instances.
   ORT_API2_STATUS(SetInputs, _In_ OrtGraph* graph,
-                  _In_reads_(inputs_len) _In_ OrtTypeInfo** inputs, _In_ size_t inputs_len);
+                  _In_reads_(inputs_len) _In_ OrtValueInfo** inputs, _In_ size_t inputs_len);
   ORT_API2_STATUS(SetOutputs, _In_ OrtGraph* graph,
-                  _In_reads_(outputs_len) _In_ OrtTypeInfo** outputs, _In_ size_t outputs_len);
+                  _In_reads_(outputs_len) _In_ OrtValueInfo** outputs, _In_ size_t outputs_len);
 
   // Get current inputs/outputs. Expected usage is augmenting an existing graph.
-  // To change the inputs/outputs, use CloneTypeInfo for any OrtTypeInfo instances you want to keep, use CreateTypeInfo
-  // to create new inputs/outputs, and call SetInputs/SetOutputs with the new instances.
-  ORT_API2_STATUS(GetInputs, _In_ OrtGraph* graph, _Inout_ const OrtTypeInfo** inputs, _Out_ size_t* inputs_len);
-  ORT_API2_STATUS(GetOutputs, _In_ OrtGraph* graph, _Inout_ const OrtTypeInfo** outputs, _Out_ size_t* outputs_len);
+  // To change the inputs/outputs, use CloneValueInfo for any OrtValueInfo instances you want to keep,
+  // and CreateValueInfo to create new inputs/outputs.
+  // Call SetInputs/SetOutputs with the new instances to replace all existing inputs/outputs.
+  ORT_API2_STATUS(GetInputs, _In_ OrtGraph* graph, _Inout_ const OrtValueInfo** inputs, _Out_ size_t* inputs_len);
+  ORT_API2_STATUS(GetOutputs, _In_ OrtGraph* graph, _Inout_ const OrtValueInfo** outputs, _Out_ size_t* outputs_len);
 
   // 2 use cases. User is free to choose either approach but the suggested usage would be:
   //
