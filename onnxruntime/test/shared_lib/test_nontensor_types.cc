@@ -678,6 +678,11 @@ TEST(CApiTest, SparseTensorFillSparseTensorFormatAPI) {
   }
 }
 
+TEST(CApi, TestResize) {
+  std::vector<Ort::Value> values;
+  values.resize(10);
+}
+
 TEST(CApiTest, SparseTensorFillSparseFormatStringsAPI) {
   auto allocator = Ort::AllocatorWithDefaultOptions();
   Ort::MemoryInfo info("Cpu", OrtDeviceAllocator, 0, OrtMemTypeDefault);

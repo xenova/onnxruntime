@@ -212,18 +212,18 @@ class ThreadPoolProfiler {
     WAIT_REVOKE,
     MAX_EVENT
   };
-  ThreadPoolProfiler(int, const CHAR_TYPE*){};
+  ThreadPoolProfiler(int, const CHAR_TYPE*) {};
   ~ThreadPoolProfiler() = default;
   ORT_DISALLOW_COPY_ASSIGNMENT_AND_MOVE(ThreadPoolProfiler);
-  void Start(){};
+  void Start() {};
   std::string Stop() { return "not available for minimal build"; }
-  void LogStart(){};
+  void LogStart() {};
   void LogEnd(ThreadPoolEvent){};
   void LogEndAndStart(ThreadPoolEvent){};
   void LogStartAndCoreAndBlock(std::ptrdiff_t){};
   void LogCoreAndBlock(std::ptrdiff_t){};
-  void LogThreadId(int){};
-  void LogRun(int){};
+  void LogThreadId(int) {};
+  void LogRun(int) {};
   std::string DumpChildThreadStat() { return {}; }
 };
 #else
@@ -634,9 +634,11 @@ class RunQueue {
   // position, these conditions would be indistinguishable); (2) obtain
   // consistent snapshot of front_/back_ for Size operation using the
   // modification counters.
+#pragma warning(disable : 4324)
   ORT_ALIGN_TO_AVOID_FALSE_SHARING std::atomic<unsigned> front_;
   ORT_ALIGN_TO_AVOID_FALSE_SHARING std::atomic<unsigned> back_;
   ORT_ALIGN_TO_AVOID_FALSE_SHARING Elem array_[kSize];
+#pragma warning(default : 4324)
 
   // SizeOrNotEmpty returns current queue size; if NeedSizeEstimate is false,
   // only whether the size is 0 is guaranteed to be correct.

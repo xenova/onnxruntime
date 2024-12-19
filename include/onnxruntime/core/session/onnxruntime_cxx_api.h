@@ -1294,11 +1294,11 @@ using UnownedValue = detail::ValueImpl<detail::Unowned<OrtValue>>;
  */
 struct Value : detail::ValueImpl<OrtValue> {
   using Base = detail::ValueImpl<OrtValue>;
+  using Base::Base;
   using OrtSparseValuesParam = detail::OrtSparseValuesParam;
   using Shape = detail::Shape;
 
-  explicit Value(std::nullptr_t) {}         ///< Create an empty Value object, must be assigned a valid one to be used
-  explicit Value(OrtValue* p) : Base{p} {}  ///< Used for interop with the C API
+  explicit Value(std::nullptr_t) {}  ///< Create an empty Value object, must be assigned a valid one to be used
   Value(Value&&) = default;
   Value& operator=(Value&&) = default;
 
