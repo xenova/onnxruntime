@@ -1298,6 +1298,7 @@ struct Value : detail::ValueImpl<OrtValue> {
   using OrtSparseValuesParam = detail::OrtSparseValuesParam;
   using Shape = detail::Shape;
 
+  Value() = default;
   explicit Value(std::nullptr_t) {}  ///< Create an empty Value object, must be assigned a valid one to be used
   Value(Value&&) = default;
   Value& operator=(Value&&) = default;
