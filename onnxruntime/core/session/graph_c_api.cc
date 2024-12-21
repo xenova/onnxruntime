@@ -5,6 +5,8 @@
 
 #include "core/framework/error_code_helper.h"
 #include "core/framework/ort_value.h"
+#include "core/framework/onnxruntime_typeinfo.h"
+#include "core/framework/tensor_type_and_shape.h"
 #include "core/graph/constants.h"
 #include "core/graph/graph_api_types.h"
 #include "core/graph/onnx_protobuf.h"
@@ -19,60 +21,56 @@ using namespace onnxruntime;
 
 namespace OrtGraphApis {
 
-ORT_API_STATUS_IMPL(CreateShape, _Outptr_ OrtShape** shape) {
-  API_IMPL_BEGIN
-  *shape = new OrtShape();
-  return nullptr;
-  API_IMPL_END
+namespace {
+std::unique_ptr<OrtModel> CreateOrtModelFromSession(InferenceSession& session) {
+  auto model = std::make_unique<OrtModel>();
+
+  // start with the minimal amount of info.
+  // we need opsets and a Graph instance
+  // user can query session inputs/outputs using existing API
+  // they can add Node and Initializer instances to the Graph, and provide additional domain:opset info if needed
+  model->graph = std::make_unique<OrtGraph>();
 }
 
-ORT_API_STATUS_IMPL(AddDimension, _In_ OrtShape* shape, int64_t dim_value) {
+ORT_API_STATUS_IMPL(CreateValueInfo, _In_ const char* name, _In_ const OrtTypeInfo* type_info,
+                    _Outptr_ OrtValueInfo** value_info) {
   API_IMPL_BEGIN
-  shape->shape_proto.add_dim()->set_dim_value(dim_value);
-  return nullptr;
-  API_IMPL_END
-}
-
-ORT_API_STATUS_IMPL(AddDynamicDimension, _In_ OrtShape* shape, const char* dimension_name) {
-  API_IMPL_BEGIN
-  if (dimension_name == nullptr || *dimension_name == '\0') {
-    shape->shape_proto.add_dim();  // 'unknown'dimension exists but has neither dim_value nor dim_param
-  } else {
-    shape->shape_proto.add_dim()->set_dim_param(dimension_name);
+  if (name == nullptr || *name == '\0') {
+    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "name cannot be null or empty string");
   }
 
-  return nullptr;
-  API_IMPL_END
-}
-
-ORT_API_STATUS_IMPL(CreateFixedShape, _In_ const int64_t* dim_values, size_t dim_count, _Outptr_ OrtShape** shape) {
-  API_IMPL_BEGIN
-  auto s = std::make_unique<OrtShape>();
-  for (size_t i = 0; i < dim_count; ++i) {
-    s->shape_proto.add_dim()->set_dim_value(dim_values[i]);
+  if (type_info == nullptr) {
+    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "type_info cannot be null");
   }
 
-  *shape = s.release();
-  return nullptr;
-  API_IMPL_END
-}
+  if (type_info->type != ONNX_TYPE_TENSOR) {
+    return OrtApis::CreateStatus(ORT_FAIL, "Only tensor types are supported currently");
+  }
 
-ORT_API(void, ReleaseShape, _Frees_ptr_opt_ OrtShape* shape) {
-  delete shape;
-}
+  if (type_info->tensor_type_info == nullptr) {
+    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "tensor_type_info cannot be null");
+  }
 
-ORT_API_STATUS_IMPL(CreateTensorValueInfo, _In_ const char* name, _In_ ONNXTensorElementDataType type,
-                    _Inout_ OrtShape** shape, _Outptr_ OrtValueInfo** value_info) {
-  API_IMPL_BEGIN
   auto vi = std::make_unique<OrtValueInfo>();
-  vi->value_info_proto.set_name(name);
-  auto* tensor = vi->value_info_proto.mutable_type()->mutable_tensor_type();
-  tensor->set_elem_type(type);
-  *tensor->mutable_shape() = (*shape)->shape_proto;
+  vi->name = name;
+  vi->type_info = type_info->Clone();
 
   *value_info = vi.release();
-  delete *shape;  // take ownership of the OrtShape
-  *shape = nullptr;
+
+  return nullptr;
+  API_IMPL_END
+}
+
+ORT_API_STATUS_IMPL(GetValueInfoName, _In_ const OrtValueInfo* value_info, _Out_ const char** name) {
+  API_IMPL_BEGIN
+  *name = value_info->name.c_str();
+  return nullptr;
+  API_IMPL_END
+}
+ORT_API_STATUS_IMPL(GetValueInfoTypeInfo, _In_ const OrtValueInfo* value_info, _Outptr_ const OrtTypeInfo** type_info) {
+  API_IMPL_BEGIN
+
+  *type_info = value_info->type_info.get();
 
   return nullptr;
   API_IMPL_END
@@ -140,33 +138,48 @@ ORT_API_STATUS_IMPL(CreateGraph, _Outptr_ OrtGraph** graph) {
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(AddInput, _In_ OrtGraph* graph, _Inout_ OrtValueInfo** value_info) {
+ORT_API_STATUS_IMPL(SetGraphInputs, _In_ OrtGraph* graph,
+                    _In_reads_(inputs_len) _In_ OrtValueInfo** inputs, _In_ size_t inputs_len) {
   API_IMPL_BEGIN
-  graph->inputs.push_back(std::unique_ptr<OrtValueInfo>(*value_info));  // take ownership
-  *value_info = nullptr;
-  return nullptr;
-  API_IMPL_END
-}
-ORT_API_STATUS_IMPL(AddOutput, _In_ OrtGraph* graph, _Inout_ OrtValueInfo** value_info) {
-  API_IMPL_BEGIN
-  graph->outputs.push_back(std::unique_ptr<OrtValueInfo>(*value_info));  // take ownership
-  *value_info = nullptr;
+  for (size_t i = 0; i < inputs_len; ++i) {
+    if (inputs[i] == nullptr) {
+      return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "inputs cannot contain null entries");
+    }
+
+    graph->inputs.push_back(std::unique_ptr<OrtValueInfo>(inputs[i]));  // take ownership
+    inputs[i] = nullptr;
+  }
+
   return nullptr;
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(AddInitializer, _In_ OrtGraph* graph, _In_ const char* name, _Inout_ OrtValue** tensor) {
+ORT_API_STATUS_IMPL(SetGraphOutputs, _In_ OrtGraph* graph,
+                    _In_reads_(outputs_len) _In_ OrtValueInfo** outputs, _In_ size_t outputs_len) {
   API_IMPL_BEGIN
-  graph->initializers[name] = std::unique_ptr<OrtValue>(*tensor);  // take ownership
-  *tensor = nullptr;
+  for (size_t i = 0; i < outputs_len; ++i) {
+    if (outputs[i] == nullptr) {
+      return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "outputs cannot contain null entries");
+    }
+
+    graph->outputs.push_back(std::unique_ptr<OrtValueInfo>(outputs[i]));  // take ownership
+    outputs[i] = nullptr;
+  }
+
   return nullptr;
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(AddNode, _In_ OrtGraph* graph, _Inout_ OrtNode** node) {
+ORT_API_STATUS_IMPL(AddInitializerToGraph, _In_ OrtGraph* graph, _In_ const char* name, _Inout_ OrtValue* tensor) {
   API_IMPL_BEGIN
-  graph->nodes.push_back(std::unique_ptr<OrtNode>(*node));  // take ownership
-  *node = nullptr;
+  graph->initializers[name] = std::unique_ptr<OrtValue>(tensor);  // take ownership
+  return nullptr;
+  API_IMPL_END
+}
+
+ORT_API_STATUS_IMPL(AddNodeToGraph, _In_ OrtGraph* graph, _Inout_ OrtNode* node) {
+  API_IMPL_BEGIN
+  graph->nodes.push_back(std::unique_ptr<OrtNode>(node));  // take ownership
   return nullptr;
   API_IMPL_END
 }
@@ -191,16 +204,18 @@ ORT_API_STATUS_IMPL(CreateModel,
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(AddGraph, _In_ OrtModel* model, _Inout_ OrtGraph** graph) {
+ORT_API_STATUS_IMPL(AddGraphToModel, _In_ OrtModel* model, _Inout_ OrtGraph* graph) {
   API_IMPL_BEGIN
 
-  // TODO: High level validation
-  // Has inputs
-  // Has outputs
-  // Nodes are not necessarily required in a subgraph as a branch of an If may just pass through a value
+  if (graph == nullptr) {
+    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "graph cannot be null");
+  }
 
-  model->graph = std::unique_ptr<OrtGraph>(*graph);  // take ownership
-  *graph = nullptr;
+  if (graph->inputs.empty() || graph->outputs.empty()) {
+    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "graph must have at least one input and one output");
+  }
+
+  model->graph = std::unique_ptr<OrtGraph>(graph);  // take ownership
   return nullptr;
   API_IMPL_END
 }
@@ -239,39 +254,115 @@ ORT_API_STATUS_IMPL(CreateSessionFromModel, _In_ const OrtEnv* env, _In_ const O
   API_IMPL_END
 }
 
+ORT_API_STATUS_IMPL(CreateModelBuilderSession, _In_ const OrtEnv* env, _In_ const ORTCHAR_T* model_path,
+                    _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out, _Outptr_ OrtModel** model) {
+  API_IMPL_BEGIN
+  std::unique_ptr<onnxruntime::InferenceSession> session;
+  OrtStatus* status = nullptr;
+  *out = nullptr;
+
+  ORT_TRY {
+    ORT_API_RETURN_IF_ERROR(CreateSessionAndLoadModel(options, env, model_path, nullptr, 0, session));
+    // No call to InitializeSession. We do that in UpdateSessionWithModel.
+    // ORT_API_RETURN_IF_ERROR(InitializeSession(options, sess));
+
+    auto session_model = CreateOrtModelFromSession(*session);
+    *out = reinterpret_cast<OrtSession*>(session.release());
+    *model = session_model.release();
+  }
+  ORT_CATCH(const std::exception& e) {
+    ORT_HANDLE_EXCEPTION([&]() {
+      status = OrtApis::CreateStatus(ORT_FAIL, e.what());
+    });
+  }
+
+  return status;
+  API_IMPL_END
+}
+
+ORT_API_STATUS_IMPL(CreateModelBuilderSessionFromArray, _In_ const OrtEnv* env,
+                    _In_ const void* model_data, size_t model_data_length,
+                    _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out, _Outptr_ OrtModel** model) {
+  API_IMPL_BEGIN
+  std::unique_ptr<onnxruntime::InferenceSession> session;
+  OrtStatus* status = nullptr;
+  *out = nullptr;
+
+  ORT_TRY {
+    ORT_API_RETURN_IF_ERROR(CreateSessionAndLoadModel(options, env, nullptr, model_data, model_data_length, session));
+    // No call to InitializeSession. We do that in UpdateSessionWithModel
+    // ORT_API_RETURN_IF_ERROR(InitializeSession(options, sess));
+
+    auto session_model = CreateOrtModelFromSession(*session);
+    *out = reinterpret_cast<OrtSession*>(session.release());
+    *model = session_model.release();
+  }
+  ORT_CATCH(const std::exception& e) {
+    ORT_HANDLE_EXCEPTION([&]() {
+      status = OrtApis::CreateStatus(ORT_FAIL, e.what());
+    });
+  }
+
+  return status;
+  API_IMPL_END
+}
+
+ORT_API_STATUS_IMPL(GetGraphFromModel, _In_ OrtModel* model, _Outptr_ OrtGraph** graph) {
+  API_IMPL_BEGIN
+  *graph = model->graph.get();
+  return nullptr;
+  API_IMPL_END
+}
+
+ORT_API_STATUS_IMPL(ApplyModelToSession, _In_ OrtSession* session, _In_ OrtModel* model,
+                    _In_reads_(additional_opset_entries_len) const char* const* additional_domain_names,
+                    _In_reads_(additional_opset_entries_len) const int* additional_opset_versions,
+                    _In_ size_t additional_opset_entries_len) {
+  API_IMPL_BEGIN
+  for (size_t i = 0; i < additional_opset_entries_len; ++i) {
+    model->domain_to_version[additional_domain_names[i]] = additional_opset_versions[i];
+  }
+
+  auto sess = reinterpret_cast<onnxruntime::InferenceSession*>(session);
+  ORT_API_RETURN_IF_STATUS_NOT_OK(sess->ApplyUpdates(*model));
+
+  return nullptr;
+  API_IMPL_END
+
 }  // namespace OrtGraphApis
 
 static constexpr OrtGraphApi ort_graph_api = {
     // NOTE: The C# bindings depend on the API order within this struct so all additions must be at the end,
     // and no functions can be removed (the implementation needs to change to return an error).
-    &OrtGraphApis::CreateFixedShape,
-    &OrtGraphApis::CreateShape,
-    &OrtGraphApis::AddDimension,
-    &OrtGraphApis::AddDynamicDimension,
-    &OrtGraphApis::ReleaseShape,
-
-    &OrtGraphApis::CreateTensorValueInfo,
+    &OrtGraphApis::CreateValueInfo,
+    &OrtGraphApis::GetValueInfoName,
+    &OrtGraphApis::GetValueInfoTypeInfo,
     &OrtGraphApis::ReleaseValueInfo,
 
     &OrtGraphApis::CreateNode,
     &OrtGraphApis::ReleaseNode,
 
     &OrtGraphApis::CreateGraph,
-    &OrtGraphApis::AddInput,
-    &OrtGraphApis::AddOutput,
-    &OrtGraphApis::AddInitializer,
-    &OrtGraphApis::AddNode,
+    &OrtGraphApis::SetGraphInputs,
+    &OrtGraphApis::SetGraphOutputs,
+    &OrtGraphApis::AddInitializerToGraph,
+    &OrtGraphApis::AddNodeToGraph,
     &OrtGraphApis::ReleaseGraph,
 
     &OrtGraphApis::CreateModel,
-    &OrtGraphApis::AddGraph,
+    &OrtGraphApis::AddGraphToModel,
     &OrtGraphApis::ReleaseModel,
 
     &OrtGraphApis::CreateSessionFromModel,
+
+    &OrtGraphApis::CreateModelBuilderSession,
+    &OrtGraphApis::CreateModelBuilderSessionFromArray,
+    &OrtGraphApis::GetGraphFromModel,
+    &OrtGraphApis::ApplyModelToSession,
 };
 
 // checks that we don't violate the rule that the functions must remain in the slots they were originally assigned
-static_assert(offsetof(OrtGraphApi, CreateSessionFromModel) / sizeof(void*) == 18,
+static_assert(offsetof(OrtGraphApi, ApplyModelToSession) / sizeof(void*) == 19,
               "Size of version 21 API cannot change");  // initial version in ORT 1.21
 
 ORT_API(const OrtGraphApi*, OrtGraphApis::GetGraphApi) {

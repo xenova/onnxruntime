@@ -7,6 +7,7 @@
 #include "core/framework/execution_provider.h"
 #include "core/session/abi_session_options_impl.h"
 #include "core/session/inference_session.h"
+#include "core/session/inference_session_utils.h"
 #include "core/session/onnxruntime_c_api.h"
 
 using namespace onnxruntime;
@@ -30,6 +31,64 @@ common::Status CopyStringToOutputArg(std::string_view str, const char* err_msg, 
   // User has provided a buffer that is not large enough
   *size = req_size;
   return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT, err_msg);
+}
+
+// provider either model_path, or modal_data + model_data_length.
+OrtStatus* CreateSessionAndLoadModel(_In_ const OrtSessionOptions* options,
+                                     _In_ const OrtEnv* env,
+                                     _In_opt_z_ const ORTCHAR_T* model_path,
+                                     _In_opt_ const void* model_data,
+                                     size_t model_data_length,
+                                     std::unique_ptr<onnxruntime::InferenceSession>& sess) {
+  // quick check here to decide load path. InferenceSession will provide error message for invalid values.
+  // TODO: Could move to a helper
+  const Env& os_env = Env::Default();  // OS environment (!= ORT environment)
+  bool load_config_from_model =
+      os_env.GetEnvironmentVar(inference_session_utils::kOrtLoadConfigFromModelEnvVar) == "1";
+
+  if (load_config_from_model) {
+#if !defined(ORT_MINIMAL_BUILD)
+    if (model_path != nullptr) {
+      sess = std::make_unique<onnxruntime::InferenceSession>(
+          options == nullptr ? onnxruntime::SessionOptions() : options->value,
+          env->GetEnvironment(),
+          model_path);
+    } else {
+      sess = std::make_unique<onnxruntime::InferenceSession>(
+          options == nullptr ? onnxruntime::SessionOptions() : options->value,
+          env->GetEnvironment(),
+          model_data, static_cast<int>(model_data_length));
+    }
+#else
+    return OrtApis::CreateStatus(ORT_FAIL, "Loading config from ONNX models is not supported in this build.");
+#endif
+  } else {
+    sess = std::make_unique<onnxruntime::InferenceSession>(
+        options == nullptr ? onnxruntime::SessionOptions() : options->value,
+        env->GetEnvironment());
+  }
+
+#if !defined(ORT_MINIMAL_BUILD) || defined(ORT_MINIMAL_BUILD_CUSTOM_OPS)
+  // Add custom domains
+  if (options && !options->custom_op_domains_.empty()) {
+    ORT_API_RETURN_IF_STATUS_NOT_OK(sess->AddCustomOpDomains(options->custom_op_domains_));
+  }
+#endif
+
+  // Finish load
+  if (load_config_from_model) {
+#if !defined(ORT_MINIMAL_BUILD)
+    ORT_API_RETURN_IF_STATUS_NOT_OK(sess->Load());
+#endif
+  } else {
+    if (model_path != nullptr) {
+      ORT_API_RETURN_IF_STATUS_NOT_OK(sess->Load(model_path));
+    } else {
+      ORT_API_RETURN_IF_STATUS_NOT_OK(sess->Load(model_data, static_cast<int>(model_data_length)));
+    }
+  }
+
+  return nullptr;
 }
 
 OrtStatus* InitializeSession(_In_ const OrtSessionOptions* options,

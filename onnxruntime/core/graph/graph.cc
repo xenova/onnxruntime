@@ -16,6 +16,7 @@
 #include "core/common/logging/logging.h"
 #include "core/common/narrow.h"
 #include "core/flatbuffers/flatbuffers_utils.h"
+#include "core/framework/tensor_type_and_shape.h"
 #include "core/flatbuffers/schema/ort.fbs.h"
 #include "core/framework/tensor_shape.h"
 #include "core/framework/tensorprotoutils.h"
@@ -5233,6 +5234,9 @@ Status Graph::InlineFunction(Node& callnode) {
 }
 
 void Graph::SetInputs(gsl::span<const NodeArg* const> inputs) {
+  graph_inputs_including_initializers_.clear();
+  graph_inputs_excluding_initializers_.clear();
+
   // creating graph from scratch
   // rely on SetGraphInputsOutputs() to fix up graph_inputs_excluding_initializers_
   // if is_loaded_from_model_file_ == false
@@ -5241,7 +5245,6 @@ void Graph::SetInputs(gsl::span<const NodeArg* const> inputs) {
 
   if (is_loaded_from_model_file_) {
     // graph loaded from model file
-    graph_inputs_excluding_initializers_.clear();
     for (const auto* input : inputs) {
       ORT_ENFORCE(input->Exists(), "Input to set must exist.");
       if (name_to_initial_tensor_.find(input->Name()) == name_to_initial_tensor_.end()) {
@@ -5258,6 +5261,7 @@ void Graph::SetInputs(gsl::span<const NodeArg* const> inputs) {
 }
 
 void Graph::SetOutputs(gsl::span<const NodeArg* const> outputs) {
+  graph_outputs_.clear();
   graph_outputs_.reserve(outputs.size());
   graph_outputs_.assign(outputs.begin(), outputs.end());
 
@@ -5576,6 +5580,41 @@ common::Status Graph::LoadFromOrtFormat(const onnxruntime::fbs::Graph& fbs_graph
   return Status::OK();
 }
 
+namespace {
+ValueInfoProto OrtValueInfoToOnnx(const OrtValueInfo& vi) {
+  // the model builder API checks that the OrtValueInfo has a complete and valid OrtTypeInfo instance and that the
+  // name is not null/empty.
+  ORT_ENFORCE(vi.type_info->type == ONNX_TYPE_TENSOR,
+              "Internal error. Model Builder API should only allow OrtValueInfo for tensor to be created.");
+
+  ValueInfoProto value_info_proto;
+  value_info_proto.set_name(vi.name);
+
+  auto* tensor = value_info_proto.mutable_type()->mutable_tensor_type();
+  const OrtTensorTypeAndShapeInfo& tensor_info = *vi.type_info->tensor_type_info.get();
+  tensor->set_elem_type(tensor_info.type);
+
+  auto& shape = *tensor->mutable_shape();
+
+  size_t idx = 0;
+  for (auto dim : tensor_info.shape.GetDims()) {
+    auto& dim_proto = *shape.add_dim();
+    if (dim >= 0) {
+      dim_proto.set_dim_value(dim);
+    } else {
+      const std::string& dim_param = tensor_info.dim_params[idx];
+      // if empty leave the new dim_proto with neither dim_value nor dim_param set. this represents an 'unknown' dim
+      if (!dim_param.empty()) {
+        dim_proto.set_dim_param(dim_param);
+      }
+    }
+  }
+
+  return value_info_proto;
+}
+
+}  // namespace
+
 Status Graph::LoadFromGraphApiModel(const OrtGraph& api_graph) {
   ArgNameToTypeMap name_to_type_map;
 
@@ -5589,9 +5628,7 @@ Status Graph::LoadFromGraphApiModel(const OrtGraph& api_graph) {
     std::vector<const NodeArg*> node_args;
     node_args.reserve(graph_inputs_or_outputs.size());
     for (auto& ort_value_info : graph_inputs_or_outputs) {
-      const ValueInfoProto& value_info = ort_value_info->value_info_proto;
-      // assuming input has name and type. this needs to be enforced either here or in the graph api implementation
-      ORT_ENFORCE(utils::HasName(value_info) && utils::HasType(value_info), "Graph input must have name and type.");
+      ValueInfoProto value_info = OrtValueInfoToOnnx(*ort_value_info);
 
       name_to_type_map[value_info.name()] = value_info.type();
       node_args.push_back(&GetOrCreateNodeArg(value_info.name(), &value_info.type()));
@@ -5726,6 +5763,23 @@ Status Graph::LoadFromGraphApiModel(const OrtGraph& api_graph,
                                   strict_shape_type_inference);
 
   return graph->LoadFromGraphApiModel(api_graph);
+}
+
+Status Graph::UpdateUsingGraphApiModel(const OrtModel& api_model) {
+  for (auto& entry : api_model.domain_to_version) {
+    if (auto it = domain_to_version_.find(entry.first); it != domain_to_version_.end()) {
+      if (it->second != entry.second) {
+        return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
+                               "Domain version can not be changed for '", entry.first,
+                               "'. Current version: ", it->second);
+      }
+    } else {
+      domain_to_version_.insert(entry);
+    }
+  }
+
+  // this will replace all inputs/outputs and add nodes.
+  return LoadFromGraphApiModel(*api_model.graph);
 }
 
 }  // namespace onnxruntime

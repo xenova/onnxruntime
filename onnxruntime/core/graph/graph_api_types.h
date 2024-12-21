@@ -2,17 +2,15 @@
 // Licensed under the MIT License.
 
 #include "core/framework/ort_value.h"
+#include "core/framework/onnxruntime_typeinfo.h"
 #include "core/graph/onnx_protobuf.h"
 
 // ORT C interface types for OrtGraphApi can't be in a namespace.
 // We need to define them here so onnxruntime::Model can be created from OrtModel.
 
-struct OrtShape {
-  ONNX_NAMESPACE::TensorShapeProto shape_proto;
-};
-
 struct OrtValueInfo {
-  ONNX_NAMESPACE::ValueInfoProto value_info_proto;
+  std::string name;
+  std::unique_ptr<OrtTypeInfo> type_info;
 };
 
 struct OrtOpAttr {

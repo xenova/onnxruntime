@@ -1457,6 +1457,8 @@ class Graph {  // NOLINT(clang-analyzer-optin.performance.Padding): preserve exi
                                       const logging::Logger& logger,
                                       std::unique_ptr<Graph>& graph);
 
+  Status UpdateUsingGraphApiModel(const OrtModel& api_model);
+
 #if !defined(ORT_MINIMAL_BUILD) || defined(ORT_EXTENDED_MINIMAL_BUILD)
   const RuntimeOptimizationRecordContainer& RuntimeOptimizations() const {
     return runtime_optimizations_;
@@ -1796,7 +1798,7 @@ class Graph {  // NOLINT(clang-analyzer-optin.performance.Padding): preserve exi
   std::unordered_map<std::string, std::unordered_set<NodeIndex>> node_arg_to_consumer_nodes_;
 #endif  // !defined(ORT_MINIMAL_BUILD) || defined(ORT_EXTENDED_MINIMAL_BUILD)
 
-  const std::unordered_map<std::string, int> domain_to_version_;
+  std::unordered_map<std::string, int> domain_to_version_;
 
   // Model IR version.
   Version ir_version_{ONNX_NAMESPACE::Version::IR_VERSION};

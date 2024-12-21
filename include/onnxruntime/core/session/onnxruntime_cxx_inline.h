@@ -2181,30 +2181,6 @@ inline std::vector<const char*> StringsToCharPtrs(const std::vector<std::string>
   return ptrs;
 }
 
-inline Shape::Shape(const std::vector<int64_t>& dims) {
-  ThrowOnError(GetGraphApi().CreateFixedShape(dims.data(), dims.size(), &p_));
-}
-
-inline Shape::Shape(const std::vector<Dimension>& dims) {
-  ThrowOnError(GetGraphApi().CreateShape(&p_));
-  for (const auto& dim : dims) {
-    if (std::holds_alternative<int64_t>(dim)) {
-      ThrowOnError(GetGraphApi().AddDimension(p_, std::get<int64_t>(dim)));
-    } else {
-      ThrowOnError(GetGraphApi().AddDynamicDimension(p_, std::get<std::string>(dim).c_str()));
-    }
-  }
-}
-
-// static
-inline ValueInfo ValueInfo::CreateTensorValueInfo(const std::string& name, ONNXTensorElementDataType type,
-                                                  Shape& shape) {
-  // ValueInfo takes ownership of `shape`
-  ValueInfo vi(nullptr);
-  ThrowOnError(GetGraphApi().CreateTensorValueInfo(name.c_str(), type, shape.release_on_success(), &vi.p_));
-  return vi;
-}
-
 // static
 inline void Node::Init(const std::string& operator_name, const std::string& operator_domain,
                        const std::string& node_name,
@@ -2215,17 +2191,19 @@ inline void Node::Init(const std::string& operator_name, const std::string& oper
   auto inputs = StringsToCharPtrs(input_names);
   auto outputs = StringsToCharPtrs(output_names);
 
-  std::vector<OrtOpAttr**> attributes_ptrs;
+  std::vector<OrtOpAttr*> attributes_ptrs;
   attributes_ptrs.reserve(attributes.size());
   std::transform(attributes.begin(), attributes.end(), std::back_inserter(attributes_ptrs),
-                 [](OpAttr& attr) { return attr.release_on_success(); });
+                 [](OpAttr& attr) -> OrtOpAttr* { return attr; });
 
-  // Node takes ownership of `attributes`
   ThrowOnError(GetGraphApi().CreateNode(operator_name.c_str(), operator_domain.c_str(), node_name.c_str(),
                                         inputs.data(), inputs.size(),
                                         outputs.data(), outputs.size(),
                                         attributes_ptrs.data(), attributes_ptrs.size(),
                                         &node));
+
+  // Node now owns the attributes
+  std::for_each(attributes.begin(), attributes.end(), [](OpAttr& attr) { attr.release(); });
 }
 
 inline Node::Node(const std::string& operator_name, const std::string& operator_domain,
@@ -2262,30 +2240,61 @@ inline Model::Model(const std::vector<DomainOpsetPair>& opsets) {
   ThrowOnError(GetGraphApi().CreateModel(domains.data(), versions.data(), opsets.size(), &p_));
 }
 
+inline ValueInfo::ValueInfo(const std::string& name, ConstTypeInfo& type_info) {
+  ThrowOnError(GetGraphApi().CreateValueInfo(name.c_str(), type_info, &p_));
+}
 namespace detail {
-inline void GraphImpl<OrtGraph>::AddInput(ValueInfo& input) {
-  // Graph takes ownership of `input`
-  ThrowOnError(GetGraphApi().AddInput(p_, input.release_on_success()));
+inline std::string ValueInfoImpl<OrtValueInfo>::Name() const {
+  const char* name = nullptr;
+  ThrowOnError(GetGraphApi().GetValueInfoName(p_, &name));
+  return name;
 }
 
-inline void GraphImpl<OrtGraph>::AddOutput(ValueInfo& output) {
-  // Graph takes ownership of `output`
-  ThrowOnError(GetGraphApi().AddOutput(p_, output.release_on_success()));
+inline ConstTypeInfo ValueInfoImpl<OrtValueInfo>::TypeInfo() const {
+  const OrtTypeInfo* type_info = nullptr;
+  ThrowOnError(GetGraphApi().GetValueInfoTypeInfo(p_, &type_info));
+  return ConstTypeInfo{type_info};
+}
+
+inline void GraphImpl<OrtGraph>::SetInputs(std::vector<ValueInfo>& inputs) {
+  std::vector<OrtValueInfo*> inputs_ptrs;
+  inputs_ptrs.reserve(inputs.size());
+
+  // Graph takes ownership.
+  std::transform(inputs.begin(), inputs.end(), std::back_inserter(inputs_ptrs),
+                 [](ValueInfo& vi) -> OrtValueInfo* { return vi.release(); });
+
+  ThrowOnError(GetGraphApi().SetGraphInputs(p_, inputs_ptrs.data(), inputs_ptrs.size()));
+
+  // Graph now owns the inputs
+  std::for_each(inputs.begin(), inputs.end(), [](ValueInfo& vi) { vi.release(); });
+}
+
+inline void GraphImpl<OrtGraph>::SetOutputs(std::vector<ValueInfo>& outputs) {
+  std::vector<OrtValueInfo*> outputs_ptrs;
+  outputs_ptrs.reserve(outputs.size());
+  std::transform(outputs.begin(), outputs.end(), std::back_inserter(outputs_ptrs),
+                 [](ValueInfo& vi) -> OrtValueInfo* { return vi; });
+
+  ThrowOnError(GetGraphApi().SetGraphOutputs(p_, outputs_ptrs.data(), outputs_ptrs.size()));
+
+  // Graph now owns the outputs
+  std::for_each(outputs.begin(), outputs.end(), [](ValueInfo& vi) { vi.release(); });
 }
 
 inline void GraphImpl<OrtGraph>::AddInitializer(const std::string& name, Value& initializer) {
   // Graph takes ownership of `initializer`
-  ThrowOnError(GetGraphApi().AddInitializer(p_, name.c_str(), initializer.release_on_success()));
+  ThrowOnError(GetGraphApi().AddInitializerToGraph(p_, name.c_str(), initializer.release()));
 }
 
 inline void GraphImpl<OrtGraph>::AddNode(Node& node) {
   // Graph takes ownership of `node`
-  ThrowOnError(GetGraphApi().AddNode(p_, node.release_on_success()));
+  ThrowOnError(GetGraphApi().AddNodeToGraph(p_, node.release()));
 }
 
 inline void ModelImpl<OrtModel>::AddGraph(Graph& graph) {
   // Model takes ownership of `graph`
-  ThrowOnError(GetGraphApi().AddGraph(p_, graph.release_on_success()));
+  ThrowOnError(GetGraphApi().AddGraphToModel(p_, graph.release()));
 }
 }  // namespace detail
 }  // namespace GraphApi

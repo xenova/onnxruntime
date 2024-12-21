@@ -36,6 +36,7 @@
 #include "core/framework/ort_value_pattern_planner.h"
 #include "core/framework/transform_layout_functions.h"
 #include "core/framework/utils.h"
+#include "core/graph/graph_api_types.h"
 #include "core/graph/graph_viewer.h"
 #include "core/graph/model.h"
 #include "core/optimizer/graph_transformer_utils.h"
@@ -1222,6 +1223,26 @@ common::Status InferenceSession::Load(const OrtModel& graph_api_model) {
   model_ = std::move(tmp_model);
 
   is_model_loaded_ = true;
+
+  return Status::OK();
+}
+
+common::Status InferenceSession::ApplyUpdates(const OrtModel& graph_api_model) {
+  std::lock_guard<std::mutex> l(session_mutex_);
+
+  if (!is_model_loaded_) {
+    Status status(common::ONNXRUNTIME, common::MODEL_LOADED, "This session does not contain a loaded model.");
+    LOGS(*session_logger_, ERROR) << status.ErrorMessage();
+    return status;
+  }
+
+  if (is_inited_) {
+    Status status(common::ONNXRUNTIME, common::MODEL_LOADED, "This session has already been initialized.");
+    LOGS(*session_logger_, ERROR) << status.ErrorMessage();
+    return status;
+  }
+
+  auto& graph = model_->MainGraph().UpdateUsingGraphApiModel(graph_api_model);
 
   return Status::OK();
 }
@@ -3316,6 +3337,10 @@ common::Status InferenceSession::WaitForNotification(Notification* p_executor_do
   p_executor_done->Wait();
 
   return Status::OK();
+}
+
+const Model& InferenceSession::GetModel() const {
+  return *model_;
 }
 
 SessionIOBinding::SessionIOBinding(InferenceSession* session) : sess_(session) {

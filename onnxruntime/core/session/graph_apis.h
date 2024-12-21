@@ -3,14 +3,10 @@ namespace OrtGraphApis {
 // implementation that returns the API struct
 ORT_API(const OrtGraphApi*, GetGraphApi);
 
-ORT_API_STATUS_IMPL(CreateFixedShape, _In_ const int64_t* dim_values, size_t dim_count, _Outptr_ OrtShape** shape);
-ORT_API_STATUS_IMPL(CreateShape, _Outptr_ OrtShape** shape);
-ORT_API_STATUS_IMPL(AddDimension, _In_ OrtShape* shape, int64_t dim_value);
-ORT_API_STATUS_IMPL(AddDynamicDimension, _In_ OrtShape* shape, const char* dimension_name);
-ORT_API(void, ReleaseShape, _Frees_ptr_opt_ OrtShape* shape);
-
-ORT_API_STATUS_IMPL(CreateTensorValueInfo, _In_ const char* name, _In_ ONNXTensorElementDataType type,
-                    _Inout_ OrtShape** shape, _Outptr_ OrtValueInfo** value_info);
+ORT_API_STATUS_IMPL(CreateValueInfo, _In_ const char* name, _In_ const OrtTypeInfo* type_info,
+                    _Outptr_ OrtValueInfo** value_info);
+ORT_API_STATUS_IMPL(GetValueInfoName, _In_ const OrtValueInfo* value_info, _Out_ const char** name);
+ORT_API_STATUS_IMPL(GetValueInfoTypeInfo, _In_ const OrtValueInfo* value_info, _Outptr_ const OrtTypeInfo** type_info);
 ORT_API(void, ReleaseValueInfo, _Frees_ptr_opt_ OrtValueInfo* value_info);
 
 ORT_API_STATUS_IMPL(CreateNode, const char* operator_name, const char* domain_name, _In_ const char* node_name,
@@ -21,10 +17,12 @@ ORT_API_STATUS_IMPL(CreateNode, const char* operator_name, const char* domain_na
 ORT_API(void, ReleaseNode, _Frees_ptr_opt_ OrtNode* node);
 
 ORT_API_STATUS_IMPL(CreateGraph, _Outptr_ OrtGraph** graph);
-ORT_API_STATUS_IMPL(AddInput, _In_ OrtGraph* graph, _Inout_ OrtValueInfo** value_info);
-ORT_API_STATUS_IMPL(AddOutput, _In_ OrtGraph* graph, _Inout_ OrtValueInfo** value_info);
-ORT_API_STATUS_IMPL(AddInitializer, _In_ OrtGraph* graph, _In_ const char* name, _Inout_ OrtValue** tensor);
-ORT_API_STATUS_IMPL(AddNode, _In_ OrtGraph* graph, _Inout_ OrtNode** node);
+ORT_API_STATUS_IMPL(SetGraphInputs, _In_ OrtGraph* graph,
+                    _In_reads_(inputs_len) _In_ OrtValueInfo** inputs, _In_ size_t inputs_len);
+ORT_API_STATUS_IMPL(SetGraphOutputs, _In_ OrtGraph* graph,
+                    _In_reads_(outputs_len) _In_ OrtValueInfo** outputs, _In_ size_t outputs_len);
+ORT_API_STATUS_IMPL(AddInitializerToGraph, _In_ OrtGraph* graph, _In_ const char* name, _Inout_ OrtValue* tensor);
+ORT_API_STATUS_IMPL(AddNodeToGraph, _In_ OrtGraph* graph, _Inout_ OrtNode* node);
 ORT_API(void, ReleaseGraph, _Frees_ptr_opt_ OrtGraph* graph);
 
 ORT_API_STATUS_IMPL(CreateModel,
@@ -32,10 +30,26 @@ ORT_API_STATUS_IMPL(CreateModel,
                     _In_reads_(opset_entries_len) const int* opset_versions,
                     size_t opset_entries_len,
                     _Outptr_ OrtModel** model);
-ORT_API_STATUS_IMPL(AddGraph, _In_ OrtModel* model, _Inout_ OrtGraph** graph);
+ORT_API_STATUS_IMPL(AddGraphToModel, _In_ OrtModel* model, _Inout_ OrtGraph* graph);
 ORT_API(void, ReleaseModel, _Frees_ptr_opt_ OrtModel* model);
 
 ORT_API_STATUS_IMPL(CreateSessionFromModel, _In_ const OrtEnv* env, _In_ const OrtModel* model,
                     _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out);
+//
+// Model editing APIs for updating existing model
+//
+ORT_API_STATUS_IMPL(CreateModelBuilderSession, _In_ const OrtEnv* env, _In_ const ORTCHAR_T* model_path,
+                    _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out, _Outptr_ OrtModel** model);
+
+ORT_API_STATUS_IMPL(CreateModelBuilderSessionFromArray, _In_ const OrtEnv* env,
+                    _In_ const void* model_data, size_t model_data_length,
+                    _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out, _Outptr_ OrtModel** model);
+
+ORT_API_STATUS_IMPL(GetGraphFromModel, _In_ OrtModel* model, _Outptr_ OrtGraph** graph);
+
+ORT_API_STATUS_IMPL(ApplyModelToSession, _In_ OrtSession* session, _In_ OrtModel* model,
+                    _In_reads_(additional_opset_entries_len) const char* const* additional_domain_names,
+                    _In_reads_(additional_opset_entries_len) const int* additional_opset_versions,
+                    _In_ size_t additional_opset_entries_len);
 
 }  // namespace OrtGraphApis

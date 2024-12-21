@@ -536,7 +536,6 @@ ORT_DEFINE_RELEASE(KernelInfo);
 #define ORT_DEFINE_GRAPH_API_RELEASE(NAME) \
   inline void OrtRelease(Ort##NAME* ptr) { GetGraphApi().Release##NAME(ptr); }
 
-ORT_DEFINE_GRAPH_API_RELEASE(Shape);
 ORT_DEFINE_GRAPH_API_RELEASE(ValueInfo);
 ORT_DEFINE_GRAPH_API_RELEASE(Node);
 ORT_DEFINE_GRAPH_API_RELEASE(Graph);
@@ -598,14 +597,6 @@ struct Base {
     T* p = p_;
     p_ = nullptr;
     return p;
-  }
-
-  /// \brief Allows relinquishing ownership of the contained C object pointer if the API call is successful
-  /// The underlying object is not destroyed
-  // TODO: Refine this. Method name is based on usage not what it does which is ugly.
-  //       Should we use `friend` instead to allow ownership transfer when building a model at runtime?
-  contained_type** release_on_success() {
-    return &p_;
   }
 
  protected:
@@ -2511,36 +2502,12 @@ namespace GraphApi {
 
 namespace detail {
 template <typename T>
-struct ShapeImpl : Ort::detail::Base<T> {
-  using B = Ort::detail::Base<T>;
-  using B::B;
-
-  template <typename U>
-  bool operator==(const ShapeImpl<U>& o) const;
-};
-}  // namespace detail
-
-// Const object holder that does not own the underlying object
-using ConstShape = detail::ShapeImpl<Ort::detail::Unowned<const OrtShape>>;
-
-/** \brief Wrapper around ::OrtShape
- *
- */
-struct Shape : detail::ShapeImpl<OrtShape> {
-  using Dimension = std::variant<int64_t, std::string>;
-  explicit Shape(std::nullptr_t) {}                        ///< No instance is created
-  explicit Shape(OrtShape* p) : ShapeImpl<OrtShape>{p} {}  ///< Take ownership of a pointer created by C Api
-  Shape(const std::vector<int64_t>& dims);                 ///< Wraps CreateFixedShape. All dims must be >= 0.
-  Shape(const std::vector<Dimension>& dims);               /// <Wraps CreateShape + AddDimension/AddDynamicDimension
-
-  ConstShape GetConst() const { return ConstShape{this->p_}; }
-};
-
-namespace detail {
-template <typename T>
 struct ValueInfoImpl : Ort::detail::Base<T> {
   using B = Ort::detail::Base<T>;
   using B::B;
+
+  std::string Name() const;
+  ConstTypeInfo TypeInfo() const;
 
   template <typename U>
   bool operator==(const ValueInfoImpl<U>& o) const;
@@ -2558,7 +2525,7 @@ struct ValueInfo : detail::ValueInfoImpl<OrtValueInfo> {
   explicit ValueInfo(OrtValueInfo* p) : ValueInfoImpl<OrtValueInfo>{p} {}  ///< Take ownership of a pointer created by C Api
 
   // Create ValueInfo for a tensor
-  static ValueInfo CreateTensorValueInfo(const std::string& name, ONNXTensorElementDataType type, Shape& shape);
+  explicit ValueInfo(const std::string& name, ConstTypeInfo& type_info);
 
   ConstValueInfo GetConst() const { return ConstValueInfo{this->p_}; }
 };
@@ -2615,8 +2582,8 @@ struct GraphImpl : Ort::detail::Base<T> {
   using B = Ort::detail::Base<T>;
   using B::B;
 
-  void AddInput(ValueInfo& input);
-  void AddOutput(ValueInfo& output);
+  void SetInputs(std::vector<ValueInfo>& inputs);
+  void SetOutputs(std::vector<ValueInfo>& outputs);
   void AddInitializer(const std::string& name, Value& initializer);  // Graph takes ownership of Value
   void AddNode(Node& node);                                          // Graph takes ownership of Node
 

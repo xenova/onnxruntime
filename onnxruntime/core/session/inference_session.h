@@ -330,6 +330,19 @@ class InferenceSession {
    * @return OK if success.
    */
   [[nodiscard]] common::Status Load(const OrtModel& graph_api_model);
+
+  /**
+   * Apply updates from an OrtModel that was created via OrtGraphApi.
+   * This can:
+   *   - add nodes at the start and end of the model
+   *   - add initializers
+   *   - update the graph inputs/outputs
+   *
+   * @param graph_api_model OrtModel from OrtGraphApi
+   * @return OK if success.
+   */
+  [[nodiscard]] common::Status ApplyUpdates(const OrtModel& graph_api_model);
+
 #endif  // !defined(ORT_MINIMAL_BUILD)
 
   /**
@@ -555,6 +568,8 @@ class InferenceSession {
    * @param prepacked_weights_container PrepackedWeightsContainer instance
    */
   Status AddPrePackedWeightsContainer(PrepackedWeightsContainer* prepacked_weights_container);
+
+  const Model& GetModel() const;
 
  protected:
 #if !defined(ORT_MINIMAL_BUILD)

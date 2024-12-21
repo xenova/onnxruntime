@@ -28,6 +28,7 @@
 #include "core/framework/utils.h"
 #include "core/graph/constants.h"
 #include "core/graph/graph.h"
+#include "core/graph/model.h"
 #include "core/providers/get_execution_providers.h"
 #include "core/session/abi_session_options_impl.h"
 #include "core/session/allocator_adapters.h"
@@ -115,6 +116,70 @@ using namespace onnxruntime;
   auto v = (value);                \
   auto tensor = v->GetMutable<onnxruntime::Tensor>();
 
+namespace {
+// Create tensor. Allocates memory. Tensor owns memory. Allocator is wrapped and stored in a shared_ptr in Tensor.
+ORT_STATUS_PTR CreateTensorImpl(MLDataType ml_type, const int64_t* shape, size_t shape_len,
+                                OrtAllocator* allocator, OrtValue& value) {
+  TensorShape tensor_shape(shape, shape_len);
+  AllocatorPtr alloc_ptr = std::make_shared<onnxruntime::IAllocatorImplWrappingOrtAllocator>(allocator);
+  Tensor::InitOrtValue(ml_type, tensor_shape, std::move(alloc_ptr), value);
+  return nullptr;
+}
+
+ORT_STATUS_PTR CreateTensorImplForSeq(MLDataType elem_type, const int64_t* shape, size_t shape_len, Tensor& out) {
+  OrtAllocator* allocator;
+  // TODO(pranav): what allocator should be used to create the tensor here?
+  // for the sake of simplicity of the API using the default one here
+  ORT_API_RETURN_IF_ERROR(OrtApis::GetAllocatorWithDefaultOptions(&allocator));
+  AllocatorPtr alloc_ptr = std::make_shared<onnxruntime::IAllocatorImplWrappingOrtAllocator>(allocator);
+  TensorShape tensor_shape(shape, shape_len);
+  out = Tensor(elem_type, tensor_shape, std::move(alloc_ptr));
+  return nullptr;
+}
+
+// Create Tensor with existing data. Tensor does not own memory.
+ORT_STATUS_PTR CreateTensorImpl(MLDataType ml_type,
+                                const int64_t* shape, size_t shape_len,
+                                const OrtMemoryInfo* info,
+                                void* p_data, size_t p_data_len,
+                                OrtValue& ort_value) {
+  TensorShape tensor_shape(shape, shape_len);
+  if (std::any_of(tensor_shape.GetDims().begin(), tensor_shape.GetDims().end(), [](int64_t v) { return v < 0; })) {
+    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "tried creating tensor with negative value in shape");
+  }
+
+  size_t size_to_allocate = 0;
+  Status status = Tensor::CalculateTensorStorageSize(ml_type, tensor_shape, 0 /*alignment*/, size_to_allocate);
+  if (!status.IsOK()) {
+    return ToOrtStatus(status);
+  }
+  if (size_to_allocate > p_data_len) {
+    std::ostringstream oss;
+    oss << "not enough space: expected " << size_to_allocate << ", got " << p_data_len;
+    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, oss.str().c_str());
+  }
+
+  Tensor::InitOrtValue(ml_type, tensor_shape, p_data, *info, ort_value);
+  return nullptr;
+}
+
+ORT_STATUS_PTR CreateTensorImpl(MLDataType ml_type,
+                                const int64_t* shape, size_t shape_len,
+                                OrtAllocator* deleter,
+                                void* p_data, size_t p_data_len,
+                                OrtValue& ort_value) {
+  TensorShape tensor_shape(shape, shape_len);
+  if (std::any_of(tensor_shape.GetDims().begin(), tensor_shape.GetDims().end(), [](int64_t v) { return v < 0; })) {
+    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "tried creating tensor with negative value in shape");
+  }
+
+  AllocatorPtr alloc_ptr = std::make_shared<onnxruntime::IAllocatorImplWrappingOrtAllocator>(deleter);
+  Tensor::InitOrtValue(ml_type, tensor_shape, p_data, std::move(alloc_ptr), ort_value);
+  return nullptr;
+}
+
+}  // namespace
+
 ORT_API_STATUS_IMPL(OrtApis::CreateEnvWithCustomLogger, OrtLoggingFunction logging_function,
                     _In_opt_ void* logger_param, OrtLoggingLevel logging_level, _In_ const char* logid,
                     _Outptr_ OrtEnv** out) {
@@ -188,51 +253,6 @@ ORT_API_STATUS_IMPL(OrtApis::UpdateEnvWithCustomLogLevel, _In_ OrtEnv* ort_env,
   API_IMPL_END
 }
 
-ORT_STATUS_PTR CreateTensorImpl(MLDataType ml_type, const int64_t* shape, size_t shape_len,
-                                _Inout_ OrtAllocator* allocator, OrtValue& value) {
-  TensorShape tensor_shape(shape, shape_len);
-  AllocatorPtr alloc_ptr = std::make_shared<onnxruntime::IAllocatorImplWrappingOrtAllocator>(allocator);
-  Tensor::InitOrtValue(ml_type, tensor_shape, std::move(alloc_ptr), value);
-  return nullptr;
-}
-
-ORT_STATUS_PTR CreateTensorImplForSeq(MLDataType elem_type, const int64_t* shape, size_t shape_len, Tensor& out) {
-  OrtAllocator* allocator;
-  // TODO(pranav): what allocator should be used to create the tensor here?
-  // for the sake of simplicity of the API using the default one here
-  ORT_API_RETURN_IF_ERROR(OrtApis::GetAllocatorWithDefaultOptions(&allocator));
-  AllocatorPtr alloc_ptr = std::make_shared<onnxruntime::IAllocatorImplWrappingOrtAllocator>(allocator);
-  TensorShape tensor_shape(shape, shape_len);
-  out = Tensor(elem_type, tensor_shape, std::move(alloc_ptr));
-  return nullptr;
-}
-
-/**
- *
- * this function will create a copy of the allocator info
- */
-ORT_STATUS_PTR CreateTensorImpl(MLDataType ml_type, const int64_t* shape, size_t shape_len, const OrtMemoryInfo* info,
-                                void* p_data, size_t p_data_len, OrtValue& ort_value) {
-  TensorShape tensor_shape(shape, shape_len);
-  if (std::any_of(tensor_shape.GetDims().begin(), tensor_shape.GetDims().end(), [](int64_t v) { return v < 0; })) {
-    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "tried creating tensor with negative value in shape");
-  }
-
-  size_t size_to_allocate = 0;
-  Status status = Tensor::CalculateTensorStorageSize(ml_type, tensor_shape, 0 /*alignment*/, size_to_allocate);
-  if (!status.IsOK()) {
-    return ToOrtStatus(status);
-  }
-  if (size_to_allocate > p_data_len) {
-    std::ostringstream oss;
-    oss << "not enough space: expected " << size_to_allocate << ", got " << p_data_len;
-    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, oss.str().c_str());
-  }
-
-  Tensor::InitOrtValue(ml_type, tensor_shape, p_data, *info, ort_value);
-  return nullptr;
-}
-
 ORT_API_STATUS_IMPL(OrtApis::CreateTensorWithDataAsOrtValue, _In_ const OrtMemoryInfo* info,
                     _Inout_ void* p_data, size_t p_data_len, _In_ const int64_t* shape, size_t shape_len,
                     ONNXTensorElementDataType type, _Outptr_ OrtValue** out) {
@@ -240,6 +260,19 @@ ORT_API_STATUS_IMPL(OrtApis::CreateTensorWithDataAsOrtValue, _In_ const OrtMemor
   auto ml_type = DataTypeImpl::TensorTypeFromONNXEnum(type)->GetElementType();
   auto value = std::make_unique<OrtValue>();
   ORT_API_RETURN_IF_ERROR(CreateTensorImpl(ml_type, shape, shape_len, info, p_data, p_data_len, *value));
+  *out = value.release();
+  return nullptr;
+  API_IMPL_END
+}
+
+ORT_API_STATUS_IMPL(OrtApis::CreateTensorWithDataAndDeleterAsOrtValue,
+                    _In_ OrtAllocator* deleter,
+                    _Inout_ void* p_data, size_t p_data_len, _In_ const int64_t* shape, size_t shape_len,
+                    ONNXTensorElementDataType type, _Outptr_ OrtValue** out) {
+  API_IMPL_BEGIN
+  auto ml_type = DataTypeImpl::TensorTypeFromONNXEnum(type)->GetElementType();
+  auto value = std::make_unique<OrtValue>();
+  ORT_API_RETURN_IF_ERROR(CreateTensorImpl(ml_type, shape, shape_len, deleter, p_data, p_data_len, *value));
   *out = value.release();
   return nullptr;
   API_IMPL_END
@@ -679,66 +712,6 @@ ORT_API_STATUS_IMPL(OrtApis::EnableOrtCustomOps, _Inout_ OrtSessionOptions* opti
 
   API_IMPL_END
 }
-
-namespace {
-// provider either model_path, or modal_data + model_data_length.
-static ORT_STATUS_PTR CreateSessionAndLoadModel(_In_ const OrtSessionOptions* options,
-                                                _In_ const OrtEnv* env,
-                                                _In_opt_z_ const ORTCHAR_T* model_path,
-                                                _In_opt_ const void* model_data,
-                                                size_t model_data_length,
-                                                std::unique_ptr<onnxruntime::InferenceSession>& sess) {
-  // quick check here to decide load path. InferenceSession will provide error message for invalid values.
-  // TODO: Could move to a helper
-  const Env& os_env = Env::Default();  // OS environment (!= ORT environment)
-  bool load_config_from_model =
-      os_env.GetEnvironmentVar(inference_session_utils::kOrtLoadConfigFromModelEnvVar) == "1";
-
-  if (load_config_from_model) {
-#if !defined(ORT_MINIMAL_BUILD)
-    if (model_path != nullptr) {
-      sess = std::make_unique<onnxruntime::InferenceSession>(
-          options == nullptr ? onnxruntime::SessionOptions() : options->value,
-          env->GetEnvironment(),
-          model_path);
-    } else {
-      sess = std::make_unique<onnxruntime::InferenceSession>(
-          options == nullptr ? onnxruntime::SessionOptions() : options->value,
-          env->GetEnvironment(),
-          model_data, static_cast<int>(model_data_length));
-    }
-#else
-    return OrtApis::CreateStatus(ORT_FAIL, "Loading config from ONNX models is not supported in this build.");
-#endif
-  } else {
-    sess = std::make_unique<onnxruntime::InferenceSession>(
-        options == nullptr ? onnxruntime::SessionOptions() : options->value,
-        env->GetEnvironment());
-  }
-
-#if !defined(ORT_MINIMAL_BUILD) || defined(ORT_MINIMAL_BUILD_CUSTOM_OPS)
-  // Add custom domains
-  if (options && !options->custom_op_domains_.empty()) {
-    ORT_API_RETURN_IF_STATUS_NOT_OK(sess->AddCustomOpDomains(options->custom_op_domains_));
-  }
-#endif
-
-  // Finish load
-  if (load_config_from_model) {
-#if !defined(ORT_MINIMAL_BUILD)
-    ORT_API_RETURN_IF_STATUS_NOT_OK(sess->Load());
-#endif
-  } else {
-    if (model_path != nullptr) {
-      ORT_API_RETURN_IF_STATUS_NOT_OK(sess->Load(model_path));
-    } else {
-      ORT_API_RETURN_IF_STATUS_NOT_OK(sess->Load(model_data, static_cast<int>(model_data_length)));
-    }
-  }
-
-  return nullptr;
-}
-}  // namespace
 
 ORT_API_STATUS_IMPL(OrtApis::CreateSession, _In_ const OrtEnv* env, _In_ const ORTCHAR_T* model_path,
                     _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out) {
@@ -1344,6 +1317,20 @@ ORT_API_STATUS_IMPL(OrtApis::SessionGetOutputCount, _In_ const OrtSession* sess,
 
 ORT_API_STATUS_IMPL(OrtApis::SessionGetOverridableInitializerCount, _In_ const OrtSession* sess, _Out_ size_t* out) {
   return GetNodeDefListCountHelper(sess, get_overridable_initializers_fn, out);
+}
+
+ORT_API_STATUS_IMPL(SessionGetOpsetForDomain, _In_ const OrtSession* ort_session, _In_ const char* domain,
+                    _Out_ int* opset) {
+  const auto& session = *reinterpret_cast<const ::onnxruntime::InferenceSession*>(ort_session);
+  const auto& domain_opset_map = session.Model().MainGraph().DomainToVersionMap();
+
+  auto it = domain_opset_map.find(domain);
+  if (it == domain_opset_map.cend()) {
+    return OrtApis::CreateStatus(ORT_FAIL, "Domain not used by model.");
+  }
+
+  *opset = it->second;
+  return nullptr;
 }
 
 static ORT_STATUS_PTR GetNodeDefTypeInfoHelper(const OrtSession* sess, GetDefListFn get_fn, size_t index,
@@ -2786,6 +2773,15 @@ static constexpr OrtApi ort_api_1_to_21 = {
     // End of Version 20 - DO NOT MODIFY ABOVE (see above text for more information)
 
     &OrtApis::GetGraphApi,
+
+    &OrtApis::CreateTensorWithDataAndDeleterAsOrtValue,
+
+    // APIs to create/edit type info when building/modifying a model using the Graph API
+    &OrtApis::CreateTensorTypeInfo,
+    &OrtApis::CreateSparseTensorTypeInfo,
+    &OrtApis::CreateMapTypeInfo,
+    &OrtApis::CreateSequenceTypeInfo,
+    &OrtApis::CreateOptionalTypeInfo,
 };
 
 // OrtApiBase can never change as there is no way to know what version of OrtApiBase is returned by OrtGetApiBase.
