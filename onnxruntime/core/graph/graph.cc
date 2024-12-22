@@ -5615,7 +5615,7 @@ ValueInfoProto OrtValueInfoToOnnx(const OrtValueInfo& vi) {
 
 }  // namespace
 
-Status Graph::LoadFromGraphApiModel(const OrtGraph& api_graph) {
+Status Graph::LoadFromGraphApiModel(const OrtGraph& api_graph, bool updating_existing_graph) {
   ArgNameToTypeMap name_to_type_map;
 
   // NOTE: need to create NodeArgs as we go along
@@ -5625,6 +5625,11 @@ Status Graph::LoadFromGraphApiModel(const OrtGraph& api_graph) {
 
   auto add_graph_inputs_outputs = [&, this](const std::vector<std::unique_ptr<OrtValueInfo>>& graph_inputs_or_outputs,
                                             bool is_input) {
+    // when updating a model we don't require the inputs or outputs to be set if they're unchanged.
+    if (updating_existing_graph && graph_inputs_or_outputs.empty()) {
+      return;
+    }
+
     std::vector<const NodeArg*> node_args;
     node_args.reserve(graph_inputs_or_outputs.size());
     for (auto& ort_value_info : graph_inputs_or_outputs) {
@@ -5748,8 +5753,7 @@ Status Graph::LoadFromGraphApiModel(const OrtGraph& api_graph) {
 }
 
 // static
-Status Graph::LoadFromGraphApiModel(const OrtGraph& api_graph,
-                                    const Model& owning_model,
+Status Graph::LoadFromGraphApiModel(const OrtGraph& api_graph, const Model& owning_model,
                                     const std::unordered_map<std::string, int>& domain_to_version,
                                     IOnnxRuntimeOpSchemaCollectionPtr schema_registry,
                                     bool strict_shape_type_inference,
@@ -5779,7 +5783,7 @@ Status Graph::UpdateUsingGraphApiModel(const OrtModel& api_model) {
   }
 
   // this will replace all inputs/outputs and add nodes.
-  return LoadFromGraphApiModel(*api_model.graph);
+  return LoadFromGraphApiModel(*api_model.graph, /*updating_existing_graph*/ true);
 }
 
 }  // namespace onnxruntime

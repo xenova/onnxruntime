@@ -33,23 +33,26 @@ ORT_API_STATUS_IMPL(CreateModel,
 ORT_API_STATUS_IMPL(AddGraphToModel, _In_ OrtModel* model, _Inout_ OrtGraph* graph);
 ORT_API(void, ReleaseModel, _Frees_ptr_opt_ OrtModel* model);
 
+// TODO Do we need this, or could we use CreateModelBuilder with nullptr for model_path?
 ORT_API_STATUS_IMPL(CreateSessionFromModel, _In_ const OrtEnv* env, _In_ const OrtModel* model,
                     _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out);
+
 //
-// Model editing APIs for updating existing model
+// Model editing APIs for updating existing model.
 //
-ORT_API_STATUS_IMPL(CreateModelBuilderSession, _In_ const OrtEnv* env, _In_ const ORTCHAR_T* model_path,
-                    _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out, _Outptr_ OrtModel** model);
+ORT_API_STATUS_IMPL(CreateModelBuilderSession, _In_ const OrtEnv* env,
+                    _In_ const ORTCHAR_T* model_path,
+                    _In_ const OrtSessionOptions* options,
+                    _Outptr_ OrtSession** out);
 
 ORT_API_STATUS_IMPL(CreateModelBuilderSessionFromArray, _In_ const OrtEnv* env,
                     _In_ const void* model_data, size_t model_data_length,
-                    _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out, _Outptr_ OrtModel** model);
+                    _In_ const OrtSessionOptions* options,
+                    _Outptr_ OrtSession** out);
 
-ORT_API_STATUS_IMPL(GetGraphFromModel, _In_ OrtModel* model, _Outptr_ OrtGraph** graph);
+ORT_API_STATUS_IMPL(ApplyModelToSession, _In_ OrtSession* session, _In_ OrtModel* model);
 
-ORT_API_STATUS_IMPL(ApplyModelToSession, _In_ OrtSession* session, _In_ OrtModel* model,
-                    _In_reads_(additional_opset_entries_len) const char* const* additional_domain_names,
-                    _In_reads_(additional_opset_entries_len) const int* additional_opset_versions,
-                    _In_ size_t additional_opset_entries_len);
+ORT_API_STATUS_IMPL(FinalizeModelBuilderSession, _In_ OrtSession* session, _In_ const OrtSessionOptions* options,
+                    _Inout_ OrtPrepackedWeightsContainer* prepacked_weights_container);
 
 }  // namespace OrtGraphApis

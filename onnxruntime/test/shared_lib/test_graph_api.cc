@@ -23,26 +23,31 @@ extern std::unique_ptr<Ort::Env> ort_env;
 using namespace Ort;
 
 namespace {
-template <typename ModelOutputT, typename ModelInputT = float>
-void TestInference(Ort::Env& env,
-                   GraphApi::Model& graph_api_model,
-                   const std::vector<Input>& inputs,
-                   const char* output_name,
-                   const std::vector<int64_t>& expected_dims,
-                   const std::vector<ModelOutputT>& expected_values,
-                   Ort::SessionOptions* session_options_for_test = nullptr) {
+
+Ort::Session CreateSession(Ort::Env& env,
+                           GraphApi::Model& graph_api_model,
+                           Ort::SessionOptions* session_options_for_test = nullptr) {
   Ort::SessionOptions default_session_options;
   Ort::SessionOptions& session_options = session_options_for_test ? *session_options_for_test
                                                                   : default_session_options;
 
-  // save model if you want to debug
+  // Set this to save the model if you want to debug.
   // session_options.SetOptimizedModelFilePath(ORT_TSTR("graph_api_model.onnx"));
 
   Ort::Session session(env, graph_api_model, session_options);
 
-  // Session should not require the model to stay alive so free it now to test.
+  // Session should not require the model to stay alive so free it now to validate.
   graph_api_model = GraphApi::Model(nullptr);
 
+  return session;
+}
+
+template <typename ModelOutputT, typename ModelInputT = float>
+void TestInference(Ort::Session& session,
+                   const std::vector<Input<ModelInputT>>& inputs,
+                   const char* output_name,
+                   const std::vector<int64_t>& expected_dims,
+                   const std::vector<ModelOutputT>& expected_values) {
   auto default_allocator = std::make_unique<MockedOrtAllocator>();
 
   // without preallocated output tensor
@@ -189,15 +194,17 @@ TEST(GraphApiTest, Basic_CApi) {
 
   ASSERT_NE(model, nullptr) << "build_model should have created a model";
 
-  std::vector<Input> inputs(1);
-  Input& input = inputs[0];
+  std::vector<Input<float>> inputs(1);
+  auto& input = inputs[0];
   input.name = "X";
   input.dims = {3, 2};
   input.values = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
 
   std::vector<int64_t> expected_dims = {3, 3};
   GraphApi::Model cxx_model(model);
-  TestInference<float>(*ort_env, cxx_model, inputs, "Z", expected_dims,
+  auto session = CreateSession(*ort_env, cxx_model);
+
+  TestInference<float>(session, inputs, "Z", expected_dims,
                        {18.0f, 24.0f, 30.0f,
                         38.0f, 52.0f, 66.0f,
                         58.0f, 80.0f, 102.0f});
@@ -219,14 +226,20 @@ TEST(GraphApiTest, Basic_CxxApi) {
   std::vector<GraphApi::ValueInfo> graph_outputs;
 
   // model input
-  std::vector<int64_t> input_dims({3, 2});
-  TensorTypeAndShapeInfo input_tensor_info(ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, input_dims);
+  std::vector<int64_t> input_dims({-1, 2});
+  std::vector<std::string> input_symbolic_dims({"multiple_of_3", ""});
+  TensorTypeAndShapeInfo input_tensor_info(ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
+                                           input_dims,
+                                           &input_symbolic_dims);
   auto input_type_info = TypeInfo::CreateTensorInfo(input_tensor_info.GetConst());
   graph_inputs.emplace_back("X", input_type_info.GetConst());
 
   // model outputs
-  std::vector<int64_t> output_dims = {3, 3};
-  TensorTypeAndShapeInfo output_tensor_info(ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, input_dims);
+  std::vector<int64_t> output_dims = {-1, 3};
+  std::vector<std::string> output_symbolic_dims({"multiple_of_3", ""});
+  TensorTypeAndShapeInfo output_tensor_info(ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
+                                            output_dims,
+                                            &output_symbolic_dims);
   auto output_type_info = TypeInfo::CreateTensorInfo(output_tensor_info.GetConst());
   graph_outputs.emplace_back("Z", output_type_info.GetConst());
 
@@ -261,15 +274,95 @@ TEST(GraphApiTest, Basic_CxxApi) {
   GraphApi::Model model(opsets);
   model.AddGraph(graph);
 
-  std::vector<Input> inputs(1);
-  Input& input = inputs[0];
+  std::vector<Input<float>> inputs(1);
+  auto& input = inputs[0];
   input.name = "X";
   input.dims = {3, 2};
   input.values = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
 
   std::vector<int64_t> expected_dims = {3, 3};
-  TestInference<float>(*ort_env, model, inputs, "Z", expected_dims,
+
+  auto session = CreateSession(*ort_env, model);
+  TestInference<float>(session, inputs, "Z", expected_dims,
                        {18.0f, 24.0f, 30.0f,
                         38.0f, 52.0f, 66.0f,
                         58.0f, 80.0f, 102.0f});
 }
+
+TEST(GraphApiTest, BasicModelEdit_CxxApi) {
+  //
+  // Load existing model
+  // Add Cast to change the model input from float to int64
+  // Update model inputs to match
+  // Run
+  //
+
+  SessionOptions so;
+  Session session = Session::CreateModelBuilderSession(*ort_env, TSTR("testdata/mnist.onnx"), so);
+
+  ASSERT_EQ(session.GetOpset(""), 8);  // ONNX domain is empty string
+
+  // we augment the original model with nodes, initializers and the updated model inputs/outputs from this model.
+  // the original graph is unchanged. nodes can be added before/after it. initializers can be added.
+  // new nodes must conform to the original domain:opset of the model.
+  // additional operator domain:opset pairs can be added.
+  std::vector<GraphApi::Model::DomainOpsetPair> opsets;
+  GraphApi::Model model(opsets);
+
+  std::vector<std::string> input_names = session.GetInputNames();
+  ASSERT_EQ(input_names.size(), 1);
+
+  TypeInfo orig_input = session.GetInputTypeInfo(0);
+  ASSERT_EQ(orig_input.GetTensorTypeAndShapeInfo().GetElementType(), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT);
+
+  const std::string new_input_name = "Int64Input";
+
+  // Add Cast node to convert input from float to int64
+  std::vector<OpAttr> attributes;
+  int64_t to = ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
+  attributes.push_back(OpAttr("to", &to, 1, OrtOpAttrType::ORT_OP_ATTR_INT));
+
+  GraphApi::Node node("Cast", onnxruntime::kOnnxDomain, new_input_name, {"Int64Input"}, {input_names[0]}, attributes);
+
+  // we're replacing the only input, so we don't need to call session.GetInputTypeInfo(x) to copy other inputs
+  // in order to preserve them
+  std::vector<GraphApi::ValueInfo> graph_inputs;
+  TensorTypeAndShapeInfo input_tensor_info(ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64,
+                                           orig_input.GetTensorTypeAndShapeInfo().GetShape());
+  auto input_type_info = TypeInfo::CreateTensorInfo(input_tensor_info.GetConst());
+  graph_inputs.emplace_back(new_input_name, input_type_info.GetConst());
+
+  GraphApi::Graph graph;  // new info to augment the model with
+
+  graph.AddNode(node);
+  graph.SetInputs(graph_inputs);
+
+  // the node we added does not require any new opsets.
+  model.AddGraph(graph);
+
+  session.FinalizeModelBuilderSession(model, so);
+
+  std::vector<Input<int64_t>> inputs(1);
+  auto& input = inputs[0];
+  input.name = new_input_name.c_str();
+  input.dims = orig_input.GetTensorTypeAndShapeInfo().GetShape();
+
+  auto num_values = std::accumulate(input.dims.begin(), input.dims.end(), int64_t(1), std::multiplies<int64_t>());
+  input.values.resize(size_t(num_values));
+  std::iota(input.values.begin(), input.values.end(), 1);
+
+  std::vector<int64_t> expected_dims = {1, 10};
+  TestInference<float>(session, inputs, session.GetOutputNames()[0].c_str(), expected_dims,
+                       {-48.5088f, -1040.2948f, -347.0959f, 101.7392f, 421.3352f, 750.92145f,
+                        231.5060f, -1694.4152f, 681.5623f, 378.1689f});
+}
+
+/*
+Tests required
+
+- Attempt to create invalid model
+- Create symbolic dims for model input or output
+- Edit and change outputs
+- Invalid edit
+- Edit where we change a subset of inputs or outputs.
+*/

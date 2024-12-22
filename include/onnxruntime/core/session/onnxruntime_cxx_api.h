@@ -1073,6 +1073,10 @@ struct ConstSessionImpl : Base<T> {
   size_t GetOutputCount() const;                  ///< Returns the number of model outputs
   size_t GetOverridableInitializerCount() const;  ///< Returns the number of inputs that have defaults that can be overridden
 
+  std::vector<std::string> GetInputNames() const;
+  std::vector<std::string> GetOutputNames() const;
+  std::vector<std::string> GetOverridableInitializerNames() const;
+
   /** \brief Returns a copy of input name at the specified index.
    *
    * \param index must less than the value returned by GetInputCount()
@@ -1106,6 +1110,8 @@ struct ConstSessionImpl : Base<T> {
   TypeInfo GetInputTypeInfo(size_t index) const;                   ///< Wraps OrtApi::SessionGetInputTypeInfo
   TypeInfo GetOutputTypeInfo(size_t index) const;                  ///< Wraps OrtApi::SessionGetOutputTypeInfo
   TypeInfo GetOverridableInitializerTypeInfo(size_t index) const;  ///< Wraps OrtApi::SessionGetOverridableInitializerTypeInfo
+
+  int GetOpset(const std::string& domain) const;  ///< Wraps OrtApi::SessionGetOpsetForDomain
 };
 
 template <typename T>
@@ -1183,6 +1189,9 @@ struct SessionImpl : ConstSessionImpl<T> {
    * \param[in] kv_len Number of elements in the keys and values arrays
    */
   void SetEpDynamicOptions(const char* const* keys, const char* const* values, size_t kv_len);
+
+  void FinalizeModelBuilderSession(const GraphApi::Model& model, const SessionOptions& options,
+                                   OrtPrepackedWeightsContainer* prepacked_weights_container = nullptr);
 };
 
 }  // namespace detail
@@ -1194,8 +1203,10 @@ using UnownedSession = detail::SessionImpl<detail::Unowned<OrtSession>>;
  *
  */
 struct Session : detail::SessionImpl<OrtSession> {
-  explicit Session(std::nullptr_t) {}  ///< Create an empty Session object, must be assigned a valid one to be used
-  /// Wraps OrtApi::CreateSession
+  /// Create an empty Session object, must be assigned a valid one to be used. Wraps OrtApi::CreateSession
+  explicit Session(std::nullptr_t) {}
+  explicit Session(OrtSession* p) : SessionImpl{p} {}  ///< C API Interop
+
   Session(const Env& env, const ORTCHAR_T* model_path, const SessionOptions& options);
 
   /// Wraps OrtApi::CreateSessionWithPrepackedWeightsContainer
@@ -1212,7 +1223,12 @@ struct Session : detail::SessionImpl<OrtSession> {
   /// Wraps OrtGraphApi::CreateSessionFromModel
   Session(const Env& env, const GraphApi::Model& model, const SessionOptions& options);
 
-  Session(const Env& env, const OrtModel& graph_api_model, const SessionOptions& options);  ///< Wraps OrtGraphApi::CreateSessionFromModel
+  /// Wraps OrtGraphApi::CreateModelBuilderSession
+  static Session CreateModelBuilderSession(const Env& env, const ORTCHAR_T* model_path, const SessionOptions& options);
+
+  /// Wraps OrtGraphApi::CreateModelBuilderSession
+  static Session CreateModelBuilderSession(const Env& env, const void* model_data, size_t model_data_length,
+                                           const SessionOptions& options);
 
   ConstSession GetConst() const { return ConstSession{this->p_}; }
   UnownedSession GetUnowned() const { return UnownedSession{this->p_}; }
@@ -1389,7 +1405,8 @@ struct TypeInfo : detail::TypeInfoImpl<OrtTypeInfo> {
   using Base = detail::TypeInfoImpl<OrtTypeInfo>;
   using Base::Base;
 
-  explicit TypeInfo(std::nullptr_t) {}                                 ///< Create an empty TypeInfo object, must be assigned a valid one to be used
+  /// Create an empty TypeInfo object, must be assigned a valid one to be used
+  explicit TypeInfo(std::nullptr_t) {}
   explicit TypeInfo(OrtTypeInfo* p) : TypeInfoImpl<OrtTypeInfo>{p} {}  ///< C API Interop
 
   static TypeInfo CreateTensorInfo(ConstTensorTypeAndShapeInfo tensor_info);

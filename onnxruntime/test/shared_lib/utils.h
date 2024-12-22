@@ -7,13 +7,14 @@
 
 OrtCUDAProviderOptions CreateDefaultOrtCudaProviderOptionsWithCustomStream(void* cuda_compute_stream = nullptr);
 
+template <typename T = float>
 struct Input {
   const char* name = nullptr;
   std::vector<int64_t> dims;
-  std::vector<float> values;
+  std::vector<T> values;
 };
 
-template <typename ModelOutputT, typename ModelInputT = float, typename InputT = Input>
+template <typename ModelOutputT, typename ModelInputT = float, typename InputT = Input<float>>
 void RunSession(OrtAllocator* allocator,
                 Ort::Session& session_object,
                 const std::vector<InputT>& inputs,

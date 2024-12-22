@@ -94,7 +94,7 @@ OrtStatus* CreateSessionAndLoadModel(_In_ const OrtSessionOptions* options,
 }
 
 OrtStatus* InitializeSession(_In_ const OrtSessionOptions* options,
-                             _In_ std::unique_ptr<::onnxruntime::InferenceSession>& sess,
+                             _In_ onnxruntime::InferenceSession& sess,
                              _Inout_opt_ OrtPrepackedWeightsContainer* prepacked_weights_container) {
   // we need to disable mem pattern if DML is one of the providers since DML doesn't have the concept of
   // byte addressable memory
@@ -109,16 +109,16 @@ OrtStatus* InitializeSession(_In_ const OrtSessionOptions* options,
   // register the providers
   for (auto& provider : provider_list) {
     if (provider) {
-      ORT_API_RETURN_IF_STATUS_NOT_OK(sess->RegisterExecutionProvider(std::move(provider)));
+      ORT_API_RETURN_IF_STATUS_NOT_OK(sess.RegisterExecutionProvider(std::move(provider)));
     }
   }
 
   if (prepacked_weights_container != nullptr) {
-    ORT_API_RETURN_IF_STATUS_NOT_OK(sess->AddPrePackedWeightsContainer(
+    ORT_API_RETURN_IF_STATUS_NOT_OK(sess.AddPrePackedWeightsContainer(
         reinterpret_cast<PrepackedWeightsContainer*>(prepacked_weights_container)));
   }
 
-  ORT_API_RETURN_IF_STATUS_NOT_OK(sess->Initialize());
+  ORT_API_RETURN_IF_STATUS_NOT_OK(sess.Initialize());
 
   return nullptr;
 }

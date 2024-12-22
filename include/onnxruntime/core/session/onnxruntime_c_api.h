@@ -2891,7 +2891,8 @@ struct OrtApi {
    * \snippet{doc} snippets.dox OrtStatus Return Value
    */
   ORT_API2_STATUS(CreateSessionWithPrepackedWeightsContainer, _In_ const OrtEnv* env, _In_ const ORTCHAR_T* model_path,
-                  _In_ const OrtSessionOptions* options, _Inout_ OrtPrepackedWeightsContainer* prepacked_weights_container,
+                  _In_ const OrtSessionOptions* options,
+                  _Inout_ OrtPrepackedWeightsContainer* prepacked_weights_container,
                   _Outptr_ OrtSession** out);
 
   /** \brief Create session from memory with prepacked weights container
@@ -2914,7 +2915,8 @@ struct OrtApi {
    */
   ORT_API2_STATUS(CreateSessionFromArrayWithPrepackedWeightsContainer, _In_ const OrtEnv* env,
                   _In_ const void* model_data, size_t model_data_length,
-                  _In_ const OrtSessionOptions* options, _Inout_ OrtPrepackedWeightsContainer* prepacked_weights_container,
+                  _In_ const OrtSessionOptions* options,
+                  _Inout_ OrtPrepackedWeightsContainer* prepacked_weights_container,
                   _Outptr_ OrtSession** out);
 
   /// @}
@@ -5033,49 +5035,23 @@ struct OrtGraphApi {
   //
 
   // Create a Session with an existing model that will by augmented.
-  // The OrtSession owns the OrtModel
-  // Update the OrtM
   ORT_API2_STATUS(CreateModelBuilderSession, _In_ const OrtEnv* env, _In_ const ORTCHAR_T* model_path,
-                  _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out, _Outptr_ OrtModel** model);
+                  _In_ const OrtSessionOptions* options,
+                  _Outptr_ OrtSession** out);
 
   ORT_API2_STATUS(CreateModelBuilderSessionFromArray, _In_ const OrtEnv* env,
                   _In_ const void* model_data, size_t model_data_length,
-                  _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out, _Outptr_ OrtModel** model);
+                  _In_ const OrtSessionOptions* options,
+                  _Outptr_ OrtSession** out);
 
-  // To get current inputs/outputs to augment an existing graph use SessionGetInputCount/SessionGetOutputCount,
-  // SessionGetInputTypeInfo/SessionGetOutputTypeInfo to get the TypeInfo, and SessionGetInputName/SessionGetOutputName
-  // to get the names.
-  //
-  // Call SetInputs/SetOutputs with the new instances to replace all existing inputs/outputs.
-  // Get OrtModel for editing. This can be used to add nodes before or after the existing Graph.
-  // The model inputs/outputs MUST be updated to reflect the changes made to the Graph.
-  // Any new operator domains must be added.
-  // Existing operator domains must be honoured. i.e. you must use the same opset the model currently uses.
-  // ORT_API2_STATUS(GetModelFromSession, _In_ OrtSession* session, _Outptr_ OrtModel** model);
+  // Update session with augmentations from the model.
+  // Existing input/outputs will only be updated if the OrtGraph inputs/outputs are set in the OrtModel.
+  // i.e. you don't need to call SetGraphInputs/Outputs if they are unchanged.
+  ORT_API2_STATUS(ApplyModelToSession, _In_ OrtSession* session, _In_ OrtModel* model);
 
-  // Get OrtGraph from OrtModel. OrtModel owns OrtGraph so use should NOT call ReleaseGraph.
-  //
-  // User can call AddNode to add nodes at the start of end of the OrtGraph.
-  // User can call AddInitializer.
-  // User must adjust the Graph inputs/outputs to be valid for the changes made.
-  //
-  // e.g. Original: InputA -> NodeA ->.
-  //     User adds a new Node 'InputPreA -> NodePreA -> InputA'.
-  //     NodeA will now consume the output of NodePreA.
-  //     The original InputA graph input must be replaced with a new graph input for InputPreA.
-  //
-  //     This is done by using SessionGetInputCount/SessionGetInputName/SessionGetInputTypeInfo to get the existing
-  //     input info. Create new OrtValueInfo instances for the required existing and new inputs.
-  //     Call SetInputs
-  ORT_API2_STATUS(GetGraphFromModel, _In_ OrtModel* model, _Outptr_ OrtGraph** graph);
-
-  // Update the model in the session.
-  // Existing opsets cannot be changed, so `additional_domain_names` must NOT match any existing domain names.
-  // Session will be finalized and ready for inferencing on completion.
-  ORT_API2_STATUS(ApplyModelToSession, _In_ OrtSession* session, _In_ OrtModel* model,
-                  _In_reads_(additional_opset_entries_len) const char* const* additional_domain_names,
-                  _In_reads_(additional_opset_entries_len) const int* additional_opset_versions,
-                  _In_ size_t additional_opset_entries_len);
+  // Finalize session so it's runnable.
+  ORT_API2_STATUS(FinalizeModelBuilderSession, _In_ OrtSession* session, _In_ const OrtSessionOptions* options,
+                  _Inout_ OrtPrepackedWeightsContainer* prepacked_weights_container);
 };
 
 /*

@@ -996,6 +996,57 @@ inline size_t ConstSessionImpl<T>::GetOverridableInitializerCount() const {
 }
 
 template <typename T>
+inline std::vector<std::string> ConstSessionImpl<T>::GetInputNames() const {
+  AllocatorWithDefaultOptions allocator;
+
+  auto num_inputs = GetInputCount();
+  std::vector<std::string> input_names;
+  input_names.reserve(num_inputs);
+
+  for (size_t i = 0; i < num_inputs; ++i) {
+    char* name = nullptr;
+    ThrowOnError(GetApi().SessionGetInputName(p_, i, allocator, &name));
+    input_names.push_back(name);
+  }
+
+  return input_names;
+}
+
+template <typename T>
+inline std::vector<std::string> ConstSessionImpl<T>::GetOutputNames() const {
+  AllocatorWithDefaultOptions allocator;
+
+  auto num_inputs = GetOutputCount();
+  std::vector<std::string> output_names;
+  output_names.reserve(num_inputs);
+
+  for (size_t i = 0; i < num_inputs; ++i) {
+    char* name = nullptr;
+    ThrowOnError(GetApi().SessionGetOutputName(p_, i, allocator, &name));
+    output_names.push_back(name);
+  }
+
+  return output_names;
+}
+
+template <typename T>
+inline std::vector<std::string> ConstSessionImpl<T>::GetOverridableInitializerNames() const {
+  AllocatorWithDefaultOptions allocator;
+
+  auto num_initializers = GetOverridableInitializerCount();
+  std::vector<std::string> initializer_names;
+  initializer_names.reserve(num_initializers);
+
+  for (size_t i = 0; i < num_initializers; ++i) {
+    char* name = nullptr;
+    ThrowOnError(GetApi().SessionGetOverridableInitializerName(p_, i, allocator, &name));
+    initializer_names.push_back(name);
+  }
+
+  return initializer_names;
+}
+
+template <typename T>
 inline AllocatedStringPtr ConstSessionImpl<T>::GetInputNameAllocated(size_t index, OrtAllocator* allocator) const {
   char* out;
   ThrowOnError(GetApi().SessionGetInputName(this->p_, index, allocator, &out));
@@ -1052,6 +1103,13 @@ inline TypeInfo ConstSessionImpl<T>::GetOverridableInitializerTypeInfo(size_t in
 }
 
 template <typename T>
+inline int ConstSessionImpl<T>::GetOpset(const std::string& domain) const {
+  int opset;
+  ThrowOnError(GetApi().SessionGetOpsetForDomain(this->p_, domain.c_str(), &opset));
+  return opset;
+}
+
+template <typename T>
 inline std::vector<Value> SessionImpl<T>::Run(const RunOptions& run_options, const char* const* input_names, const Value* input_values, size_t input_count,
                                               const char* const* output_names, size_t output_count) {
   std::vector<Value> output_values;
@@ -1096,6 +1154,13 @@ inline AllocatedStringPtr SessionImpl<T>::EndProfilingAllocated(OrtAllocator* al
 template <typename T>
 inline void SessionImpl<T>::SetEpDynamicOptions(const char* const* keys, const char* const* values, size_t kv_len) {
   ThrowOnError(GetApi().SetEpDynamicOptions(this->p_, keys, values, kv_len));
+}
+
+template <typename T>
+inline void SessionImpl<T>::FinalizeModelBuilderSession(const GraphApi::Model& model, const SessionOptions& options,
+                                                        OrtPrepackedWeightsContainer* prepacked_weights_container) {
+  ThrowOnError(GetGraphApi().ApplyModelToSession(this->p_, model));
+  ThrowOnError(GetGraphApi().FinalizeModelBuilderSession(this->p_, options, prepacked_weights_container));
 }
 
 }  // namespace detail
@@ -1145,8 +1210,28 @@ inline Session::Session(const Env& env, const void* model_data, size_t model_dat
 }
 
 inline Session::Session(const Env& env, const GraphApi::Model& model, const SessionOptions& options) {
-  ThrowOnError(GetApi().GetGraphApi()->CreateSessionFromModel(env, model.GetConst(), options, &this->p_));
+  ThrowOnError(GetGraphApi().CreateSessionFromModel(env, model.GetConst(), options, &this->p_));
 }
+
+// static
+inline Session Session::CreateModelBuilderSession(const Env& env, const ORTCHAR_T* model_path,
+                                                  const SessionOptions& options) {
+  OrtSession* session = nullptr;
+  ThrowOnError(GetGraphApi().CreateModelBuilderSession(env, model_path, options, &session));
+  return Session(session);
+}
+
+// static
+inline Session Session::CreateModelBuilderSession(const Env& env, const void* model_data, size_t model_data_length,
+                                                  const SessionOptions& options) {
+  OrtSession* session = nullptr;
+  ThrowOnError(GetGraphApi().CreateModelBuilderSessionFromArray(env, model_data, model_data_length, options,
+                                                                &session));
+  return Session(session);
+}
+
+void FinalizeModelBuilderSession(const GraphApi::Model& model, const SessionOptions& options,
+                                 OrtPrepackedWeightsContainer* prepacked_weights_container);
 
 inline AllocatedStringPtr ModelMetadata::GetProducerNameAllocated(OrtAllocator* allocator) const {
   char* out;

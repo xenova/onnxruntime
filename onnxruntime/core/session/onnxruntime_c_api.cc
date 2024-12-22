@@ -736,7 +736,7 @@ ORT_API_STATUS_IMPL(OrtApis::CreateSession, _In_ const OrtEnv* env, _In_ const O
 
   ORT_TRY {
     ORT_API_RETURN_IF_ERROR(CreateSessionAndLoadModel(options, env, model_path, nullptr, 0, sess));
-    ORT_API_RETURN_IF_ERROR(InitializeSession(options, sess));
+    ORT_API_RETURN_IF_ERROR(InitializeSession(options, *sess));
 
     *out = reinterpret_cast<OrtSession*>(sess.release());
   }
@@ -759,7 +759,7 @@ ORT_API_STATUS_IMPL(OrtApis::CreateSessionFromArray, _In_ const OrtEnv* env, _In
 
   ORT_TRY {
     ORT_API_RETURN_IF_ERROR(CreateSessionAndLoadModel(options, env, nullptr, model_data, model_data_length, sess));
-    ORT_API_RETURN_IF_ERROR(InitializeSession(options, sess));
+    ORT_API_RETURN_IF_ERROR(InitializeSession(options, *sess));
 
     *out = reinterpret_cast<OrtSession*>(sess.release());
   }
@@ -2312,7 +2312,7 @@ ORT_API_STATUS_IMPL(OrtApis::CreateSessionWithPrepackedWeightsContainer, _In_ co
 
   ORT_TRY {
     ORT_API_RETURN_IF_ERROR(CreateSessionAndLoadModel(options, env, model_path, nullptr, 0, sess));
-    ORT_API_RETURN_IF_ERROR(InitializeSession(options, sess, prepacked_weights_container));
+    ORT_API_RETURN_IF_ERROR(InitializeSession(options, *sess, prepacked_weights_container));
 
     *out = reinterpret_cast<OrtSession*>(sess.release());
   }
@@ -2338,7 +2338,7 @@ ORT_API_STATUS_IMPL(OrtApis::CreateSessionFromArrayWithPrepackedWeightsContainer
   ORT_TRY {
     ORT_API_RETURN_IF_ERROR(CreateSessionAndLoadModel(options, env, nullptr, model_data,
                                                       model_data_length, sess));
-    ORT_API_RETURN_IF_ERROR(InitializeSession(options, sess, prepacked_weights_container));
+    ORT_API_RETURN_IF_ERROR(InitializeSession(options, *sess, prepacked_weights_container));
 
     *out = reinterpret_cast<OrtSession*>(sess.release());
   }

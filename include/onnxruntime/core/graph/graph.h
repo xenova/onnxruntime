@@ -1699,7 +1699,7 @@ class Graph {  // NOLINT(clang-analyzer-optin.performance.Padding): preserve exi
     return nodes_[node_index].get();
   }
 
-  Status LoadFromGraphApiModel(const OrtGraph& api_graph);
+  Status LoadFromGraphApiModel(const OrtGraph& api_graph, bool updating_existing_graph = false);
 
   const Model& owning_model_;
 

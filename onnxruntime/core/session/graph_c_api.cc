@@ -19,19 +19,6 @@
 
 using namespace onnxruntime;
 
-namespace {
-// Create OrtModel for use with Session that has loaded an existing model.
-// The session inputs/outputs/opsets can be queried with the ORT API
-// See SessionGetInput*/SessionGetOutput*/SessionGetOpsetForDomain
-// User adds nodes and initializers as needed, and calls SetInputs and/or SetOutputs to update
-// the session inputs/outputs.
-std::unique_ptr<OrtModel> CreateOrtModelForSession() {
-  auto model = std::make_unique<OrtModel>();
-  model->graph = std::make_unique<OrtGraph>();
-  return model;
-}
-}  // namespace
-
 ORT_API_STATUS_IMPL(OrtGraphApis::CreateValueInfo, _In_ const char* name, _In_ const OrtTypeInfo* type_info,
                     _Outptr_ OrtValueInfo** value_info) {
   API_IMPL_BEGIN
@@ -206,10 +193,6 @@ ORT_API_STATUS_IMPL(OrtGraphApis::AddGraphToModel, _In_ OrtModel* model, _Inout_
     return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "graph cannot be null");
   }
 
-  if (graph->inputs.empty() || graph->outputs.empty()) {
-    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "graph must have at least one input and one output");
-  }
-
   model->graph = std::unique_ptr<OrtGraph>(graph);  // take ownership
   return nullptr;
   API_IMPL_END
@@ -234,7 +217,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::CreateSessionFromModel, _In_ const OrtEnv* env
 
     ORT_API_RETURN_IF_STATUS_NOT_OK(sess->Load(*model));
 
-    ORT_API_RETURN_IF_ERROR(InitializeSession(options, sess));
+    ORT_API_RETURN_IF_ERROR(InitializeSession(options, *sess));
 
     *out = reinterpret_cast<OrtSession*>(sess.release());
   }
@@ -250,7 +233,8 @@ ORT_API_STATUS_IMPL(OrtGraphApis::CreateSessionFromModel, _In_ const OrtEnv* env
 }
 
 ORT_API_STATUS_IMPL(OrtGraphApis::CreateModelBuilderSession, _In_ const OrtEnv* env, _In_ const ORTCHAR_T* model_path,
-                    _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out, _Outptr_ OrtModel** model) {
+                    _In_ const OrtSessionOptions* options,
+                    _Outptr_ OrtSession** out) {
   API_IMPL_BEGIN
   std::unique_ptr<onnxruntime::InferenceSession> session;
   OrtStatus* status = nullptr;
@@ -258,12 +242,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::CreateModelBuilderSession, _In_ const OrtEnv* 
 
   ORT_TRY {
     ORT_API_RETURN_IF_ERROR(CreateSessionAndLoadModel(options, env, model_path, nullptr, 0, session));
-    // No call to InitializeSession. We do that in UpdateSessionWithModel.
-    // ORT_API_RETURN_IF_ERROR(InitializeSession(options, sess));
-
-    auto session_model = CreateOrtModelForSession();
     *out = reinterpret_cast<OrtSession*>(session.release());
-    *model = session_model.release();
   }
   ORT_CATCH(const std::exception& e) {
     ORT_HANDLE_EXCEPTION([&]() {
@@ -277,7 +256,8 @@ ORT_API_STATUS_IMPL(OrtGraphApis::CreateModelBuilderSession, _In_ const OrtEnv* 
 
 ORT_API_STATUS_IMPL(OrtGraphApis::CreateModelBuilderSessionFromArray, _In_ const OrtEnv* env,
                     _In_ const void* model_data, size_t model_data_length,
-                    _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out, _Outptr_ OrtModel** model) {
+                    _In_ const OrtSessionOptions* options,
+                    _Outptr_ OrtSession** out) {
   API_IMPL_BEGIN
   std::unique_ptr<onnxruntime::InferenceSession> session;
   OrtStatus* status = nullptr;
@@ -285,12 +265,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::CreateModelBuilderSessionFromArray, _In_ const
 
   ORT_TRY {
     ORT_API_RETURN_IF_ERROR(CreateSessionAndLoadModel(options, env, nullptr, model_data, model_data_length, session));
-    // No call to InitializeSession. We do that in UpdateSessionWithModel
-    // ORT_API_RETURN_IF_ERROR(InitializeSession(options, sess));
-
-    auto session_model = CreateOrtModelForSession();
     *out = reinterpret_cast<OrtSession*>(session.release());
-    *model = session_model.release();
   }
   ORT_CATCH(const std::exception& e) {
     ORT_HANDLE_EXCEPTION([&]() {
@@ -302,29 +277,23 @@ ORT_API_STATUS_IMPL(OrtGraphApis::CreateModelBuilderSessionFromArray, _In_ const
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(OrtGraphApis::GetGraphFromModel, _In_ OrtModel* model, _Outptr_ OrtGraph** graph) {
+ORT_API_STATUS_IMPL(OrtGraphApis::ApplyModelToSession, _In_ OrtSession* session, _In_ OrtModel* model) {
   API_IMPL_BEGIN
-  *graph = model->graph.get();
+  auto sess = reinterpret_cast<onnxruntime::InferenceSession*>(session);
+  ORT_API_RETURN_IF_STATUS_NOT_OK(sess->ApplyUpdates(*model));
   return nullptr;
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(OrtGraphApis::ApplyModelToSession, _In_ OrtSession* session, _In_ OrtModel* model,
-                    _In_reads_(additional_opset_entries_len) const char* const* additional_domain_names,
-                    _In_reads_(additional_opset_entries_len) const int* additional_opset_versions,
-                    _In_ size_t additional_opset_entries_len) {
+ORT_API_STATUS_IMPL(OrtGraphApis::FinalizeModelBuilderSession, _In_ OrtSession* session,
+                    _In_ const OrtSessionOptions* options,
+                    _Inout_ OrtPrepackedWeightsContainer* prepacked_weights_container) {
   API_IMPL_BEGIN
-  for (size_t i = 0; i < additional_opset_entries_len; ++i) {
-    model->domain_to_version[additional_domain_names[i]] = additional_opset_versions[i];
-  }
-
   auto sess = reinterpret_cast<onnxruntime::InferenceSession*>(session);
-  ORT_API_RETURN_IF_STATUS_NOT_OK(sess->ApplyUpdates(*model));
-
+  ORT_API_RETURN_IF_ERROR(InitializeSession(options, *sess, prepacked_weights_container));
   return nullptr;
   API_IMPL_END
-
-}  // namespace OrtGraphApis
+}
 
 static constexpr OrtGraphApi ort_graph_api = {
     // NOTE: The C# bindings depend on the API order within this struct so all additions must be at the end,
@@ -352,12 +321,12 @@ static constexpr OrtGraphApi ort_graph_api = {
 
     &OrtGraphApis::CreateModelBuilderSession,
     &OrtGraphApis::CreateModelBuilderSessionFromArray,
-    &OrtGraphApis::GetGraphFromModel,
     &OrtGraphApis::ApplyModelToSession,
+    &OrtGraphApis::FinalizeModelBuilderSession,
 };
 
 // checks that we don't violate the rule that the functions must remain in the slots they were originally assigned
-static_assert(offsetof(OrtGraphApi, ApplyModelToSession) / sizeof(void*) == 19,
+static_assert(offsetof(OrtGraphApi, FinalizeModelBuilderSession) / sizeof(void*) == 19,
               "Size of version 21 API cannot change");  // initial version in ORT 1.21
 
 ORT_API(const OrtGraphApi*, OrtGraphApis::GetGraphApi) {
