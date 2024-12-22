@@ -12,7 +12,7 @@ ORT_API(void, ReleaseValueInfo, _Frees_ptr_opt_ OrtValueInfo* value_info);
 ORT_API_STATUS_IMPL(CreateNode, const char* operator_name, const char* domain_name, _In_ const char* node_name,
                     _In_reads_(input_names_len) const char* const* input_names, size_t input_names_len,
                     _In_reads_(output_names_len) const char* const* output_names, size_t output_names_len,
-                    _In_reads_(attribs_len) _Inout_opt_ OrtOpAttr*** attributes, _In_opt_ size_t attribs_len,
+                    _In_reads_(attribs_len) _Inout_opt_ OrtOpAttr** attributes, _In_opt_ size_t attribs_len,
                     _Outptr_ OrtNode** node);
 ORT_API(void, ReleaseNode, _Frees_ptr_opt_ OrtNode* node);
 

@@ -95,63 +95,51 @@ ORT_API_STATUS_IMPL(OrtApis::GetDenotationFromTypeInfo, _In_ const OrtTypeInfo* 
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(CreateTensorTypeInfo, ONNXTensorElementDataType element_type,
-                    _Out_ OrtTypeInfo** type_info, _Out_ OrtTensorTypeAndShapeInfo** tensor_info) {
+ORT_API_STATUS_IMPL(OrtApis::CreateTensorTypeInfo, _In_ const OrtTensorTypeAndShapeInfo* tensor_info,
+                    _Out_ OrtTypeInfo** type_info) {
   API_IMPL_BEGIN
   auto ti = std::make_unique<OrtTypeInfo>(ONNXType::ONNX_TYPE_TENSOR);
-  ti->tensor_type_info = std::make_unique<OrtTensorTypeAndShapeInfo>();
-  ti->tensor_type_info->type = element_type;
-
-  *tensor_info = ti->tensor_type_info.get();
+  ti->tensor_type_info = tensor_info->Clone();
   *type_info = ti.release();
   return nullptr;
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(CreateSparseTensorTypeInfo, ONNXTensorElementDataType element_type,
-                    _Out_ OrtTypeInfo** type_info, _Out_ OrtTensorTypeAndShapeInfo** tensor_info) {
+ORT_API_STATUS_IMPL(OrtApis::CreateSparseTensorTypeInfo, _In_ const OrtTensorTypeAndShapeInfo* tensor_info,
+                    _Out_ OrtTypeInfo** type_info) {
   API_IMPL_BEGIN
   auto ti = std::make_unique<OrtTypeInfo>(ONNXType::ONNX_TYPE_SPARSETENSOR);
-  ti->tensor_type_info = std::make_unique<OrtTensorTypeAndShapeInfo>();
-  ti->tensor_type_info->type = element_type;
-
-  *tensor_info = ti->tensor_type_info.get();
+  ti->tensor_type_info = tensor_info->Clone();
   *type_info = ti.release();
-
   return nullptr;
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(CreateMapTypeInfo, ONNXTensorElementDataType map_key_type, _In_ const OrtTypeInfo* map_value_type,
-                    _Out_ OrtTypeInfo** type_info, _Out_ OrtMapTypeInfo** map_info) {
+ORT_API_STATUS_IMPL(OrtApis::CreateMapTypeInfo, ONNXTensorElementDataType map_key_type, _In_ const OrtTypeInfo* map_value_type,
+                    _Out_ OrtTypeInfo** type_info) {
   API_IMPL_BEGIN
   auto ti = std::make_unique<OrtTypeInfo>(ONNXType::ONNX_TYPE_MAP);
   ti->map_type_info = std::make_unique<OrtMapTypeInfo>(map_key_type, map_value_type->Clone());
-  *map_info = ti->map_type_info.get();
   *type_info = ti.release();
 
   return nullptr;
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(CreateSequenceTypeInfo, _In_ const OrtTypeInfo* sequence_type,
-                    _Out_ OrtTypeInfo** type_info, _Out_ OrtSequenceTypeInfo** sequence_info) {
+ORT_API_STATUS_IMPL(OrtApis::CreateSequenceTypeInfo, _In_ const OrtTypeInfo* sequence_type, _Out_ OrtTypeInfo** type_info) {
   API_IMPL_BEGIN
   auto ti = std::make_unique<OrtTypeInfo>(ONNXType::ONNX_TYPE_SEQUENCE);
   ti->sequence_type_info = std::make_unique<OrtSequenceTypeInfo>(sequence_type->Clone());
-  *sequence_info = ti->sequence_type_info.get();
   *type_info = ti.release();
 
   return nullptr;
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(CreateOptionalTypeInfo, _In_ const OrtTypeInfo* contained_type,
-                    _Out_ OrtTypeInfo** type_info, _Out_ OrtOptionalTypeInfo** optional_info) {
+ORT_API_STATUS_IMPL(OrtApis::CreateOptionalTypeInfo, _In_ const OrtTypeInfo* contained_type, _Out_ OrtTypeInfo** type_info) {
   API_IMPL_BEGIN
   auto ti = std::make_unique<OrtTypeInfo>(ONNXType::ONNX_TYPE_OPTIONAL);
   ti->optional_type_info = std::make_unique<OrtOptionalTypeInfo>(contained_type->Clone());
-  *optional_info = ti->optional_type_info.get();
   *type_info = ti.release();
 
   return nullptr;

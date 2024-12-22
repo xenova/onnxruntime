@@ -4788,8 +4788,9 @@ struct OrtApi {
 
   // User provides custom OrtAllocator. We only call the OrtAllocator::Info and OrtAllocator::Free functions.
   // The OrtMemoryInfo returned by the allocator must match where `p_data` is.
-  ORT_API2_STATUS(CreateTensorWithDataAndDeleterAsOrtValue, _In_ const OrtAllocator* deleter,
-                  _In_ void* p_data, size_t p_data_len, _In_ const int64_t* shape, size_t shape_len,
+  ORT_API2_STATUS(CreateTensorWithDataAndDeleterAsOrtValue, _In_ OrtAllocator* deleter,
+                  _In_ void* p_data, size_t p_data_len,
+                  _In_ const int64_t* shape, size_t shape_len,
                   ONNXTensorElementDataType type,
                   _Outptr_ OrtValue** out);
 
@@ -4801,24 +4802,17 @@ struct OrtApi {
   ORT_API2_STATUS(SessionGetOpsetForDomain, _In_ const OrtSession* session, _In_ const char* domain, _Out_ int* opset);
 
   // Create TypeInfo instance to populate for graph inputs/outputs.
-  // We have to create the TypeInfo and the internal type, and need args for the latter.
-  // We _could_ just return OrtTypeInfo, but the user is going to need the internal type to actually do something
-  // meaningful with it, so return both instead of making the user call another function to get a mutable instance
-  // of the internal type.
-
-  // Create Tensor TypeInfo. User owns type_info. type_info owns tensor_info.
-  ORT_API2_STATUS(CreateTensorTypeInfo, ONNXTensorElementDataType element_type,
-                  _Out_ OrtTypeInfo** type_info, _Out_ OrtTensorTypeAndShapeInfo** tensor_info);
-  // Create SparseTensor TypeInfo. User owns type_info. type_info owns tensor_info.
-  ORT_API2_STATUS(CreateSparseTensorTypeInfo, ONNXTensorElementDataType element_type,
-                  _Out_ OrtTypeInfo** type_info, _Out_ OrtTensorTypeAndShapeInfo** tensor_info);
-  // Create Map TypeInfo. User owns type_info. type_info owns map_info.
+  // Create and populate TensorTypeAndShapeInfo first.
+  // For the Map/Sequence/Optional types call CreateTensorTypeInfo for the value/sequence/optional type and pass in.
+  // User should release the TypeInfo provided as an arg.
+  ORT_API2_STATUS(CreateTensorTypeInfo, _In_ const OrtTensorTypeAndShapeInfo* tensor_info,
+                  _Out_ OrtTypeInfo** type_info);
+  ORT_API2_STATUS(CreateSparseTensorTypeInfo, _In_ const OrtTensorTypeAndShapeInfo* tensor_info,
+                  _Out_ OrtTypeInfo** type_info);
   ORT_API2_STATUS(CreateMapTypeInfo, ONNXTensorElementDataType map_key_type, _In_ const OrtTypeInfo* map_value_type,
-                  _Out_ OrtTypeInfo** type_info, _Out_ OrtMapTypeInfo** map_info);
-  ORT_API2_STATUS(CreateSequenceTypeInfo, _In_ const OrtTypeInfo* sequence_type,
-                  _Out_ OrtTypeInfo** type_info, _Out_ OrtSequenceTypeInfo** sequence_info);
-  ORT_API2_STATUS(CreateOptionalTypeInfo, _In_ const OrtTypeInfo* contained_type,
-                  _Out_ OrtTypeInfo** type_info, _Out_ OrtOptionalTypeInfo** optional_info);
+                  _Out_ OrtTypeInfo** type_info);
+  ORT_API2_STATUS(CreateSequenceTypeInfo, _In_ const OrtTypeInfo* sequence_type, _Out_ OrtTypeInfo** type_info);
+  ORT_API2_STATUS(CreateOptionalTypeInfo, _In_ const OrtTypeInfo* contained_type, _Out_ OrtTypeInfo** type_info);
 };
 
 /*
@@ -4960,7 +4954,7 @@ struct OrtGraphApi {
   Call CreateValueInfo to combine value name with OrtTypeInfo
   ***/
 
-  // user can release type_info.
+  // Create OrtValueInfo. `type_info` is copied
   ORT_API2_STATUS(CreateValueInfo, _In_ const char* name, _In_ const OrtTypeInfo* type_info,
                   _Outptr_ OrtValueInfo** value_info);
   ORT_API2_STATUS(GetValueInfoName, _In_ const OrtValueInfo* value_info, _Out_ const char** name);
@@ -4971,8 +4965,7 @@ struct OrtGraphApi {
   // Node APIs
   //
 
-  // Create attributes with CreateOpAttr.
-  // Node takes ownership of any OrtOpAttr instances provided.
+  // Create attributes with CreateOpAttr. OrtOpAttr instances are copied.
   ORT_API2_STATUS(CreateNode, _In_ const char* operator_name, const char* domain_name, _In_ const char* node_name,
                   _In_reads_(input_names_len) const char* const* input_names, size_t input_names_len,
                   _In_reads_(output_names_len) const char* const* output_names, size_t output_names_len,
@@ -5016,7 +5009,7 @@ struct OrtGraphApi {
   //
 
   // TODO: Should we allow ModelMetadata to be provided?
-  // We have existing APIs to read the ModelMetadata but none to create it. Can add if/when needed.
+  //       We have existing APIs to read the ModelMetadata but none to create it. Can add if/when needed.
   ORT_API2_STATUS(CreateModel,
                   _In_reads_(opset_entries_len) const char* const* domain_names,
                   _In_reads_(opset_entries_len) const int* opset_versions,
@@ -5031,10 +5024,7 @@ struct OrtGraphApi {
   //
 
   // Create session.
-  // The OrtModel does not transfer ownership to allow multiple sessions to be created.
-  // Once the session is created it can be released at any time.
-  // TBD if re-using a model is needed.
-  // If not we could transfer ownership and automatically release the OrtModel once the session is created.
+  // Once the session is created the OrtModel can be released at any time.
   ORT_API2_STATUS(CreateSessionFromModel, _In_ const OrtEnv* env, _In_ const OrtModel* model,
                   _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out);
 
@@ -5042,29 +5032,9 @@ struct OrtGraphApi {
   // Model editing
   //
 
-  // TODO: How best to support creating a session with an existing model and allowing updates to it?
-  //
-  // We need to be able to update the opsets
-  //   - e.g. adding pre-processing might involve a new opset for contrib ops
-  // We need to be able to read the current opsets
-  //   - any new nodes must conform to the opset/s used in the loaded model
-  // We need to be able to get an OrtModel with the OrtGraph populated from the existing model.
-  //   - we don't need to create instances for all the nodes and initializers. user can add nodes and adjust
-  //     graph inputs/outputs but not edit the initial graph to keep things simple.
-  //
-  // If we add something to OrtSessionOptions the existing APIs could be used
-  //  - based on flag in session options, skip the call to InitializeSession in CreateSession
-  //    - that will leave the OrtSession in an invalid state
-  //  - could use SessionGetInput*/SessionGetOutput* functions to get input/output info but that's just the TypeInfo
-  //    and our API currently deals in ValueInfo for those
-  //    - how does that work with changing the inputs/outputs?
-  //      - do we skip populating the Graph API inputs/outputs until there's a call to SetInputs/SetOutputs and simply
-  //        return info from the existing model up until that point?
-  //      - how do we manage ownership of existing vs. new inputs/outputs?
-  //  - add function to get OrtModel from session
-  //  - add function to augment the onnxruntime::Graph and finalize the session
-  //    - can share implementation details with Graph::LoadFromGraphApiModel
-
+  // Create a Session with an existing model that will by augmented.
+  // The OrtSession owns the OrtModel
+  // Update the OrtM
   ORT_API2_STATUS(CreateModelBuilderSession, _In_ const OrtEnv* env, _In_ const ORTCHAR_T* model_path,
                   _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out, _Outptr_ OrtModel** model);
 

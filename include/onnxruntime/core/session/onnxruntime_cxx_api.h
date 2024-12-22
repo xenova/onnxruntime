@@ -1269,6 +1269,7 @@ struct TensorTypeAndShapeInfoImpl : Base<T> {
   void GetSymbolicDimensions(const char** values, size_t values_count) const;  ///< Wraps OrtApi::GetSymbolicDimensions
 
   std::vector<int64_t> GetShape() const;  ///< Uses GetDimensionsCount & GetDimensions to return a std::vector of the shape
+  std::vector<const char*> GetSymbolicDimensions() const;
 };
 
 }  // namespace detail
@@ -1282,8 +1283,18 @@ struct TensorTypeAndShapeInfo : detail::TensorTypeAndShapeInfoImpl<OrtTensorType
   using Base = detail::TensorTypeAndShapeInfoImpl<OrtTensorTypeAndShapeInfo>;
   using Base::Base;
 
-  explicit TensorTypeAndShapeInfo(std::nullptr_t) {}                                                ///< Create an empty TensorTypeAndShapeInfo object, must be assigned a valid one to be used
-  explicit TensorTypeAndShapeInfo(OrtTensorTypeAndShapeInfo* p) : TensorTypeAndShapeInfoImpl{p} {}  ///< Used for interop with the C API
+  /// Create an empty TensorTypeAndShapeInfo object, must be assigned a valid one to be used
+  explicit TensorTypeAndShapeInfo(std::nullptr_t) {}
+  /// Used for interop with the C API
+  explicit TensorTypeAndShapeInfo(OrtTensorTypeAndShapeInfo* p) : TensorTypeAndShapeInfoImpl{p} {}
+
+  // Create a TensorTypeAndShapeInfo object with the specified element type and dimensions
+  // symbolic_dims are optional, but should be 1:1 with dims.
+  // The value in symbolic_dims will be used for all entries in dims that are -1.
+  explicit TensorTypeAndShapeInfo(ONNXTensorElementDataType element_type,
+                                  const std::vector<int64_t>& dims,
+                                  const std::vector<std::string>* symbolic_dims = nullptr);
+
   ConstTensorTypeAndShapeInfo GetConst() const { return ConstTensorTypeAndShapeInfo{this->p_}; }
 };
 
@@ -1380,6 +1391,12 @@ struct TypeInfo : detail::TypeInfoImpl<OrtTypeInfo> {
 
   explicit TypeInfo(std::nullptr_t) {}                                 ///< Create an empty TypeInfo object, must be assigned a valid one to be used
   explicit TypeInfo(OrtTypeInfo* p) : TypeInfoImpl<OrtTypeInfo>{p} {}  ///< C API Interop
+
+  static TypeInfo CreateTensorInfo(ConstTensorTypeAndShapeInfo tensor_info);
+  static TypeInfo CreateSparseTensorInfo(ConstTensorTypeAndShapeInfo sparse_tensor_info);
+  static TypeInfo CreateSequenceTypeInfo(ConstTypeInfo sequence_type);
+  static TypeInfo CreateMapTypeInfo(ONNXTensorElementDataType key_type, ConstTypeInfo value_type);
+  static TypeInfo CreateOptionalTypeInfo(ConstTypeInfo contained_type);
 
   ConstTypeInfo GetConst() const { return ConstTypeInfo{this->p_}; }
 };

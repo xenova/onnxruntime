@@ -60,7 +60,7 @@ OrtNode* CreateNode(const OrtGraphApi& api,
                     const char* operator_name, const char* node_name,
                     const gsl::span<const char*> input_names,
                     const gsl::span<const char*> output_names,
-                    const gsl::span<OrtOpAttr**> attributes = {},
+                    const gsl::span<OrtOpAttr*> attributes = {},
                     const char* domain_name = onnxruntime::kOnnxDomain) {
   OrtNode* node = nullptr;
   Ort::ThrowOnError(api.CreateNode(operator_name, domain_name, node_name,
@@ -94,63 +94,75 @@ TEST(GraphApiTest, Basic_CApi) {
     //
 
     // model input
-    OrtShape* input_shape = nullptr;
+    OrtTensorTypeAndShapeInfo* tensor_type_info = nullptr;
     std::vector<int64_t> input_dims = {3, 2};
-    Ort::ThrowOnError(graph_api.CreateFixedShape(input_dims.data(), input_dims.size(), &input_shape));
+    // can use api.SetSymbolicDimensions to set symbolic dimensions.
+    // the input array should have the same rank as the call to SetDimensions.
+    // e.g. call SetDimensions with {-1, 3, 2} and SetSymbolicDimensions with {"N", nullptr, nullptr} to create
+    //      a shape of {"N", 3, 2}
 
-    OrtValueInfo* input_info = nullptr;
-    Ort::ThrowOnError(graph_api.CreateTensorValueInfo("X", ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &input_shape,
-                                                      &input_info));
-    ASSERT_EQ(input_shape, nullptr) << "CreateTensorValueInfo should take ownership of input_shape";
+    Ort::ThrowOnError(api.CreateTensorTypeAndShapeInfo(&tensor_type_info));
+    Ort::ThrowOnError(api.SetTensorElementType(tensor_type_info, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT));
+    Ort::ThrowOnError(api.SetDimensions(tensor_type_info, input_dims.data(), input_dims.size()));
+
+    OrtTypeInfo* input_type_info = nullptr;
+    Ort::ThrowOnError(api.CreateTensorTypeInfo(tensor_type_info, &input_type_info));
+    api.ReleaseTensorTypeAndShapeInfo(tensor_type_info);  // input_type_info took a copy
+
+    // create ValueInfo and release the type info as CreateValueInfo takes a copy.
+    OrtValueInfo* input_value_info = nullptr;
+    Ort::ThrowOnError(graph_api.CreateValueInfo("X", input_type_info, &input_value_info));
+    api.ReleaseTypeInfo(input_type_info);  // input_value_info took a copy
+    tensor_type_info = nullptr;
 
     // model outputs
-    OrtShape* output_shape = nullptr;
+    OrtTypeInfo* output_type_info = nullptr;
     std::vector<int64_t> output_dims = {3, 3};
-    Ort::ThrowOnError(graph_api.CreateFixedShape(output_dims.data(), output_dims.size(), &output_shape));
 
-    OrtValueInfo* output_info = nullptr;
-    Ort::ThrowOnError(graph_api.CreateTensorValueInfo("Z", ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &output_shape,
-                                                      &output_info));
-    ASSERT_EQ(output_shape, nullptr) << "CreateTensorValueInfo should take ownership of output_shape";
+    Ort::ThrowOnError(api.CreateTensorTypeAndShapeInfo(&tensor_type_info));
+    Ort::ThrowOnError(api.SetTensorElementType(tensor_type_info, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT));
+    Ort::ThrowOnError(api.SetDimensions(tensor_type_info, output_dims.data(), output_dims.size()));
 
-    Ort::ThrowOnError(graph_api.AddInput(graph, &input_info));
-    ASSERT_EQ(input_info, nullptr) << "AddInput should take ownership of input_info";
+    Ort::ThrowOnError(api.CreateTensorTypeInfo(tensor_type_info, &output_type_info));
+    api.ReleaseTensorTypeAndShapeInfo(tensor_type_info);  // input_type_info took a copy
 
-    Ort::ThrowOnError(graph_api.AddOutput(graph, &output_info));
-    ASSERT_EQ(output_info, nullptr) << "AddOutput should take ownership of output_info";
+    OrtValueInfo* output_value_info = nullptr;
+    Ort::ThrowOnError(graph_api.CreateValueInfo("Z", output_type_info, &output_value_info));
+    api.ReleaseTypeInfo(output_type_info);
+
+    std::vector<OrtValueInfo*> graph_inputs = {input_value_info};
+    std::vector<OrtValueInfo*> graph_outputs = {output_value_info};
+    Ort::ThrowOnError(graph_api.SetGraphInputs(graph, graph_inputs.data(), graph_inputs.size()));
+    Ort::ThrowOnError(graph_api.SetGraphOutputs(graph, graph_outputs.data(), graph_outputs.size()));
 
     //
     // Gemm node
     //
 
-    // add attribute to test it works
-    // TODO: It's slightly ugly to have to use the ORT API to create the attribute using the existing CreateOpAttr,
-    // but we can hide that in the C++ wrapper classes.
     OrtOpAttr* alpha_attr = nullptr;
     float alpha_value = 2.0;
     Ort::ThrowOnError(api.CreateOpAttr("alpha", &alpha_value, 1, OrtOpAttrType::ORT_OP_ATTR_FLOAT, &alpha_attr));
 
-    // nodes
     std::vector<const char*> node_input_names = {"X", "Y"};
     std::vector<const char*> node_output_names = {"Z"};
-    std::vector<OrtOpAttr**> node_attributes = {&alpha_attr};
+    std::vector<OrtOpAttr*> node_attributes{alpha_attr};
     OrtNode* node = CreateNode(graph_api, "Gemm", "Gemm1", node_input_names, node_output_names, node_attributes);
 
-    ASSERT_EQ(alpha_attr, nullptr) << "CreateNode should take ownership of the attributes";
+    api.ReleaseOpAttr(alpha_attr);  // CreateNode copies an OrtOpAttr instances
 
-    Ort::ThrowOnError(graph_api.AddNode(graph, &node));
-    ASSERT_EQ(node, nullptr) << "AddNode should take ownership of the node";
+    Ort::ThrowOnError(graph_api.AddNodeToGraph(graph, node));
+    node = nullptr;  // graph now owns node
 
     if (use_constant_node) {
       // create an attribute for the Y input
       // create Constant node that produces "Y" output with the value_floats attribute
       ASSERT_FALSE(true) << "Not implemented";
     } else {
-      // create an initializer for the Y input
+      // create an initializer for the Y input. add to `weights` so the memory remains valid
       OrtValue* y_tensor = nullptr;
       std::vector<int64_t> y_dims = {2, 3};
-      weights.emplace_back(std::make_unique<std::vector<float>>(
-          std::initializer_list<float>{1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}));
+      weights.emplace_back(std::make_unique<std::vector<float>>(std::initializer_list<float>{1.0f, 2.0f, 3.0f,
+                                                                                             4.0f, 5.0f, 6.0f}));
       auto& y_values = *weights.back();
       auto info = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
 
@@ -160,14 +172,15 @@ TEST(GraphApiTest, Basic_CApi) {
                                                            y_dims.data(), y_dims.size(),
                                                            ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
                                                            &y_tensor));
-      Ort::ThrowOnError(graph_api.AddInitializer(graph, "Y", &y_tensor));
+      Ort::ThrowOnError(graph_api.AddInitializerToGraph(graph, "Y", y_tensor));
+      y_tensor = nullptr;  // graph now owns
 
       std::vector<const char*> domain_names = {onnxruntime::kOnnxDomain};
       std::vector<int> opset_versions = {18};
       Ort::ThrowOnError(graph_api.CreateModel(domain_names.data(), opset_versions.data(), domain_names.size(),
                                               &model));
-      Ort::ThrowOnError(graph_api.AddGraph(model, &graph));
-      ASSERT_EQ(graph, nullptr) << "AddGraph should take ownership of the graph";
+      Ort::ThrowOnError(graph_api.AddGraphToModel(model, graph));
+      graph = nullptr;  // model now owns
     }
   };
 
@@ -202,21 +215,23 @@ TEST(GraphApiTest, Basic_CxxApi) {
   // Set the alpha attribute of the Gemm node to 2.0 to test attribute handling.
   //
 
+  std::vector<GraphApi::ValueInfo> graph_inputs;
+  std::vector<GraphApi::ValueInfo> graph_outputs;
+
   // model input
   std::vector<int64_t> input_dims({3, 2});
-  GraphApi::Shape input_shape(input_dims);
-
-  auto input_info = GraphApi::ValueInfo::CreateTensorValueInfo(std::string("X"), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
-                                                               input_shape);
+  TensorTypeAndShapeInfo input_tensor_info(ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, input_dims);
+  auto input_type_info = TypeInfo::CreateTensorInfo(input_tensor_info.GetConst());
+  graph_inputs.emplace_back("X", input_type_info.GetConst());
 
   // model outputs
   std::vector<int64_t> output_dims = {3, 3};
-  GraphApi::Shape output_shape(output_dims);
-  auto output_info = GraphApi::ValueInfo::CreateTensorValueInfo(std::string("Z"), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
-                                                                output_shape);
+  TensorTypeAndShapeInfo output_tensor_info(ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, input_dims);
+  auto output_type_info = TypeInfo::CreateTensorInfo(output_tensor_info.GetConst());
+  graph_outputs.emplace_back("Z", output_type_info.GetConst());
 
-  graph.AddInput(input_info);
-  graph.AddOutput(output_info);
+  graph.SetInputs(graph_inputs);
+  graph.SetOutputs(graph_outputs);
 
   //
   // Gemm node
@@ -245,15 +260,6 @@ TEST(GraphApiTest, Basic_CxxApi) {
   std::vector<GraphApi::Model::DomainOpsetPair> opsets{{onnxruntime::kOnnxDomain, 18}};
   GraphApi::Model model(opsets);
   model.AddGraph(graph);
-
-  // validate ownership transfer
-  ASSERT_EQ(input_shape, nullptr) << "ValueInfo should take ownership of input_shape";
-  ASSERT_EQ(output_shape, nullptr) << "ValueInfo should take ownership of output_shape";
-  ASSERT_EQ(input_info, nullptr) << "AddInput should take ownership of input_info";
-  ASSERT_EQ(output_info, nullptr) << "AddOutput should take ownership of output_info";
-  ASSERT_EQ(attributes[0], nullptr) << "Node should take ownership of the attributes";
-  ASSERT_EQ(node, nullptr) << "AddNode should take ownership of the node";
-  ASSERT_EQ(graph, nullptr) << "AddGraph should take ownership of the graph";
 
   std::vector<Input> inputs(1);
   Input& input = inputs[0];

@@ -6,9 +6,11 @@
 #include "core/framework/error_code_helper.h"
 #include "core/framework/execution_provider.h"
 #include "core/session/abi_session_options_impl.h"
+// #include "core/session/environment.h"
 #include "core/session/inference_session.h"
 #include "core/session/inference_session_utils.h"
 #include "core/session/onnxruntime_c_api.h"
+#include "core/session/ort_env.h"
 
 using namespace onnxruntime;
 

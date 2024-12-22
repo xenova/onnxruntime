@@ -173,6 +173,19 @@ ORT_STATUS_PTR CreateTensorImpl(MLDataType ml_type,
     return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "tried creating tensor with negative value in shape");
   }
 
+  size_t size_to_allocate = 0;
+  Status status = Tensor::CalculateTensorStorageSize(ml_type, tensor_shape, 0 /*alignment*/, size_to_allocate);
+
+  if (!status.IsOK()) {
+    return ToOrtStatus(status);
+  }
+
+  if (size_to_allocate > p_data_len) {
+    std::ostringstream oss;
+    oss << "p_data_len was smaller than expected. Expected:" << size_to_allocate << " Got:" << p_data_len;
+    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, oss.str().c_str());
+  }
+
   AllocatorPtr alloc_ptr = std::make_shared<onnxruntime::IAllocatorImplWrappingOrtAllocator>(deleter);
   Tensor::InitOrtValue(ml_type, tensor_shape, p_data, std::move(alloc_ptr), ort_value);
   return nullptr;
@@ -265,10 +278,11 @@ ORT_API_STATUS_IMPL(OrtApis::CreateTensorWithDataAsOrtValue, _In_ const OrtMemor
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(OrtApis::CreateTensorWithDataAndDeleterAsOrtValue,
-                    _In_ OrtAllocator* deleter,
-                    _Inout_ void* p_data, size_t p_data_len, _In_ const int64_t* shape, size_t shape_len,
-                    ONNXTensorElementDataType type, _Outptr_ OrtValue** out) {
+ORT_API_STATUS_IMPL(OrtApis::CreateTensorWithDataAndDeleterAsOrtValue, _In_ OrtAllocator* deleter,
+                    _In_ void* p_data, size_t p_data_len,
+                    _In_ const int64_t* shape, size_t shape_len,
+                    ONNXTensorElementDataType type,
+                    _Outptr_ OrtValue** out) {
   API_IMPL_BEGIN
   auto ml_type = DataTypeImpl::TensorTypeFromONNXEnum(type)->GetElementType();
   auto value = std::make_unique<OrtValue>();
@@ -1319,10 +1333,10 @@ ORT_API_STATUS_IMPL(OrtApis::SessionGetOverridableInitializerCount, _In_ const O
   return GetNodeDefListCountHelper(sess, get_overridable_initializers_fn, out);
 }
 
-ORT_API_STATUS_IMPL(SessionGetOpsetForDomain, _In_ const OrtSession* ort_session, _In_ const char* domain,
+ORT_API_STATUS_IMPL(OrtApis::SessionGetOpsetForDomain, _In_ const OrtSession* ort_session, _In_ const char* domain,
                     _Out_ int* opset) {
   const auto& session = *reinterpret_cast<const ::onnxruntime::InferenceSession*>(ort_session);
-  const auto& domain_opset_map = session.Model().MainGraph().DomainToVersionMap();
+  const auto& domain_opset_map = session.GetModel().MainGraph().DomainToVersionMap();
 
   auto it = domain_opset_map.find(domain);
   if (it == domain_opset_map.cend()) {
@@ -2775,6 +2789,7 @@ static constexpr OrtApi ort_api_1_to_21 = {
     &OrtApis::GetGraphApi,
 
     &OrtApis::CreateTensorWithDataAndDeleterAsOrtValue,
+    &OrtApis::SessionGetOpsetForDomain,
 
     // APIs to create/edit type info when building/modifying a model using the Graph API
     &OrtApis::CreateTensorTypeInfo,

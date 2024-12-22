@@ -19,20 +19,20 @@
 
 using namespace onnxruntime;
 
-namespace OrtGraphApis {
-
 namespace {
-std::unique_ptr<OrtModel> CreateOrtModelFromSession(InferenceSession& session) {
+// Create OrtModel for use with Session that has loaded an existing model.
+// The session inputs/outputs/opsets can be queried with the ORT API
+// See SessionGetInput*/SessionGetOutput*/SessionGetOpsetForDomain
+// User adds nodes and initializers as needed, and calls SetInputs and/or SetOutputs to update
+// the session inputs/outputs.
+std::unique_ptr<OrtModel> CreateOrtModelForSession() {
   auto model = std::make_unique<OrtModel>();
-
-  // start with the minimal amount of info.
-  // we need opsets and a Graph instance
-  // user can query session inputs/outputs using existing API
-  // they can add Node and Initializer instances to the Graph, and provide additional domain:opset info if needed
   model->graph = std::make_unique<OrtGraph>();
+  return model;
 }
+}  // namespace
 
-ORT_API_STATUS_IMPL(CreateValueInfo, _In_ const char* name, _In_ const OrtTypeInfo* type_info,
+ORT_API_STATUS_IMPL(OrtGraphApis::CreateValueInfo, _In_ const char* name, _In_ const OrtTypeInfo* type_info,
                     _Outptr_ OrtValueInfo** value_info) {
   API_IMPL_BEGIN
   if (name == nullptr || *name == '\0') {
@@ -61,13 +61,13 @@ ORT_API_STATUS_IMPL(CreateValueInfo, _In_ const char* name, _In_ const OrtTypeIn
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(GetValueInfoName, _In_ const OrtValueInfo* value_info, _Out_ const char** name) {
+ORT_API_STATUS_IMPL(OrtGraphApis::GetValueInfoName, _In_ const OrtValueInfo* value_info, _Out_ const char** name) {
   API_IMPL_BEGIN
   *name = value_info->name.c_str();
   return nullptr;
   API_IMPL_END
 }
-ORT_API_STATUS_IMPL(GetValueInfoTypeInfo, _In_ const OrtValueInfo* value_info, _Outptr_ const OrtTypeInfo** type_info) {
+ORT_API_STATUS_IMPL(OrtGraphApis::GetValueInfoTypeInfo, _In_ const OrtValueInfo* value_info, _Outptr_ const OrtTypeInfo** type_info) {
   API_IMPL_BEGIN
 
   *type_info = value_info->type_info.get();
@@ -76,14 +76,15 @@ ORT_API_STATUS_IMPL(GetValueInfoTypeInfo, _In_ const OrtValueInfo* value_info, _
   API_IMPL_END
 }
 
-ORT_API(void, ReleaseValueInfo, _Frees_ptr_opt_ OrtValueInfo* value_info) {
+ORT_API(void, OrtGraphApis::ReleaseValueInfo, _Frees_ptr_opt_ OrtValueInfo* value_info) {
   delete value_info;
 }
 
-ORT_API_STATUS_IMPL(CreateNode, const char* operator_name, const char* domain_name, _In_ const char* node_name,
+ORT_API_STATUS_IMPL(OrtGraphApis::CreateNode, const char* operator_name, const char* domain_name,
+                    _In_ const char* node_name,
                     _In_reads_(input_names_len) const char* const* input_names, size_t input_names_len,
                     _In_reads_(output_names_len) const char* const* output_names, size_t output_names_len,
-                    _In_reads_(attribs_len) _Inout_opt_ OrtOpAttr*** attributes, _In_opt_ size_t attribs_len,
+                    _In_reads_(attribs_len) _Inout_opt_ OrtOpAttr** attributes, _In_opt_ size_t attribs_len,
                     _Outptr_ OrtNode** node) {
   API_IMPL_BEGIN
   auto n = std::make_unique<OrtNode>();
@@ -104,13 +105,7 @@ ORT_API_STATUS_IMPL(CreateNode, const char* operator_name, const char* domain_na
   if (attributes != nullptr) {
     n->attributes.reserve(attribs_len);
     for (size_t i = 0; i < attribs_len; ++i) {
-      n->attributes.push_back(*reinterpret_cast<const ONNX_NAMESPACE::AttributeProto*>(*attributes[i]));
-    }
-
-    // take ownership now that we have successfully copied them all
-    for (size_t i = 0; i < attribs_len; ++i) {
-      delete *attributes[i];  // as we copied into OrtNode attributes we delete
-      *attributes[i] = nullptr;
+      n->attributes.push_back(*reinterpret_cast<const ONNX_NAMESPACE::AttributeProto*>(attributes[i]));
     }
   }
 
@@ -119,11 +114,11 @@ ORT_API_STATUS_IMPL(CreateNode, const char* operator_name, const char* domain_na
   API_IMPL_END
 }
 
-ORT_API(void, ReleaseNode, _Frees_ptr_opt_ OrtNode* node) {
+ORT_API(void, OrtGraphApis::ReleaseNode, _Frees_ptr_opt_ OrtNode* node) {
   delete node;
 }
 
-ORT_API_STATUS_IMPL(CreateGraph, _Outptr_ OrtGraph** graph) {
+ORT_API_STATUS_IMPL(OrtGraphApis::CreateGraph, _Outptr_ OrtGraph** graph) {
   API_IMPL_BEGIN
   auto g = std::make_unique<OrtGraph>();
 
@@ -138,7 +133,7 @@ ORT_API_STATUS_IMPL(CreateGraph, _Outptr_ OrtGraph** graph) {
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(SetGraphInputs, _In_ OrtGraph* graph,
+ORT_API_STATUS_IMPL(OrtGraphApis::SetGraphInputs, _In_ OrtGraph* graph,
                     _In_reads_(inputs_len) _In_ OrtValueInfo** inputs, _In_ size_t inputs_len) {
   API_IMPL_BEGIN
   for (size_t i = 0; i < inputs_len; ++i) {
@@ -154,7 +149,7 @@ ORT_API_STATUS_IMPL(SetGraphInputs, _In_ OrtGraph* graph,
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(SetGraphOutputs, _In_ OrtGraph* graph,
+ORT_API_STATUS_IMPL(OrtGraphApis::SetGraphOutputs, _In_ OrtGraph* graph,
                     _In_reads_(outputs_len) _In_ OrtValueInfo** outputs, _In_ size_t outputs_len) {
   API_IMPL_BEGIN
   for (size_t i = 0; i < outputs_len; ++i) {
@@ -170,25 +165,25 @@ ORT_API_STATUS_IMPL(SetGraphOutputs, _In_ OrtGraph* graph,
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(AddInitializerToGraph, _In_ OrtGraph* graph, _In_ const char* name, _Inout_ OrtValue* tensor) {
+ORT_API_STATUS_IMPL(OrtGraphApis::AddInitializerToGraph, _In_ OrtGraph* graph, _In_ const char* name, _Inout_ OrtValue* tensor) {
   API_IMPL_BEGIN
   graph->initializers[name] = std::unique_ptr<OrtValue>(tensor);  // take ownership
   return nullptr;
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(AddNodeToGraph, _In_ OrtGraph* graph, _Inout_ OrtNode* node) {
+ORT_API_STATUS_IMPL(OrtGraphApis::AddNodeToGraph, _In_ OrtGraph* graph, _Inout_ OrtNode* node) {
   API_IMPL_BEGIN
   graph->nodes.push_back(std::unique_ptr<OrtNode>(node));  // take ownership
   return nullptr;
   API_IMPL_END
 }
 
-ORT_API(void, ReleaseGraph, _Frees_ptr_opt_ OrtGraph* graph) {
+ORT_API(void, OrtGraphApis::ReleaseGraph, _Frees_ptr_opt_ OrtGraph* graph) {
   delete graph;
 }
 
-ORT_API_STATUS_IMPL(CreateModel,
+ORT_API_STATUS_IMPL(OrtGraphApis::CreateModel,
                     _In_reads_(opset_entries_len) const char* const* domain_names,
                     _In_reads_(opset_entries_len) const int* opset_versions,
                     size_t opset_entries_len,
@@ -204,7 +199,7 @@ ORT_API_STATUS_IMPL(CreateModel,
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(AddGraphToModel, _In_ OrtModel* model, _Inout_ OrtGraph* graph) {
+ORT_API_STATUS_IMPL(OrtGraphApis::AddGraphToModel, _In_ OrtModel* model, _Inout_ OrtGraph* graph) {
   API_IMPL_BEGIN
 
   if (graph == nullptr) {
@@ -220,11 +215,11 @@ ORT_API_STATUS_IMPL(AddGraphToModel, _In_ OrtModel* model, _Inout_ OrtGraph* gra
   API_IMPL_END
 }
 
-ORT_API(void, ReleaseModel, _Frees_ptr_opt_ OrtModel* model) {
+ORT_API(void, OrtGraphApis::ReleaseModel, _Frees_ptr_opt_ OrtModel* model) {
   delete model;
 }
 
-ORT_API_STATUS_IMPL(CreateSessionFromModel, _In_ const OrtEnv* env, _In_ const OrtModel* model,
+ORT_API_STATUS_IMPL(OrtGraphApis::CreateSessionFromModel, _In_ const OrtEnv* env, _In_ const OrtModel* model,
                     _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out) {
   API_IMPL_BEGIN
 
@@ -254,7 +249,7 @@ ORT_API_STATUS_IMPL(CreateSessionFromModel, _In_ const OrtEnv* env, _In_ const O
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(CreateModelBuilderSession, _In_ const OrtEnv* env, _In_ const ORTCHAR_T* model_path,
+ORT_API_STATUS_IMPL(OrtGraphApis::CreateModelBuilderSession, _In_ const OrtEnv* env, _In_ const ORTCHAR_T* model_path,
                     _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out, _Outptr_ OrtModel** model) {
   API_IMPL_BEGIN
   std::unique_ptr<onnxruntime::InferenceSession> session;
@@ -266,7 +261,7 @@ ORT_API_STATUS_IMPL(CreateModelBuilderSession, _In_ const OrtEnv* env, _In_ cons
     // No call to InitializeSession. We do that in UpdateSessionWithModel.
     // ORT_API_RETURN_IF_ERROR(InitializeSession(options, sess));
 
-    auto session_model = CreateOrtModelFromSession(*session);
+    auto session_model = CreateOrtModelForSession();
     *out = reinterpret_cast<OrtSession*>(session.release());
     *model = session_model.release();
   }
@@ -280,7 +275,7 @@ ORT_API_STATUS_IMPL(CreateModelBuilderSession, _In_ const OrtEnv* env, _In_ cons
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(CreateModelBuilderSessionFromArray, _In_ const OrtEnv* env,
+ORT_API_STATUS_IMPL(OrtGraphApis::CreateModelBuilderSessionFromArray, _In_ const OrtEnv* env,
                     _In_ const void* model_data, size_t model_data_length,
                     _In_ const OrtSessionOptions* options, _Outptr_ OrtSession** out, _Outptr_ OrtModel** model) {
   API_IMPL_BEGIN
@@ -293,7 +288,7 @@ ORT_API_STATUS_IMPL(CreateModelBuilderSessionFromArray, _In_ const OrtEnv* env,
     // No call to InitializeSession. We do that in UpdateSessionWithModel
     // ORT_API_RETURN_IF_ERROR(InitializeSession(options, sess));
 
-    auto session_model = CreateOrtModelFromSession(*session);
+    auto session_model = CreateOrtModelForSession();
     *out = reinterpret_cast<OrtSession*>(session.release());
     *model = session_model.release();
   }
@@ -307,14 +302,14 @@ ORT_API_STATUS_IMPL(CreateModelBuilderSessionFromArray, _In_ const OrtEnv* env,
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(GetGraphFromModel, _In_ OrtModel* model, _Outptr_ OrtGraph** graph) {
+ORT_API_STATUS_IMPL(OrtGraphApis::GetGraphFromModel, _In_ OrtModel* model, _Outptr_ OrtGraph** graph) {
   API_IMPL_BEGIN
   *graph = model->graph.get();
   return nullptr;
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(ApplyModelToSession, _In_ OrtSession* session, _In_ OrtModel* model,
+ORT_API_STATUS_IMPL(OrtGraphApis::ApplyModelToSession, _In_ OrtSession* session, _In_ OrtModel* model,
                     _In_reads_(additional_opset_entries_len) const char* const* additional_domain_names,
                     _In_reads_(additional_opset_entries_len) const int* additional_opset_versions,
                     _In_ size_t additional_opset_entries_len) {

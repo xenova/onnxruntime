@@ -1215,6 +1215,57 @@ inline int64_t ModelMetadata::GetVersion() const {
   return out;
 }
 
+inline TensorTypeAndShapeInfo::TensorTypeAndShapeInfo(ONNXTensorElementDataType element_type,
+                                                      const std::vector<int64_t>& dims,
+                                                      const std::vector<std::string>* symbolic_dims) {
+  ThrowOnError(GetApi().CreateTensorTypeAndShapeInfo(&p_));
+  ThrowOnError(GetApi().SetTensorElementType(p_, element_type));
+  ThrowOnError(GetApi().SetDimensions(p_, dims.data(), dims.size()));
+
+  if (symbolic_dims) {
+    std::vector<const char*> symbolic_dims_cstr;
+    symbolic_dims_cstr.reserve(symbolic_dims->size());
+    std::transform(symbolic_dims->begin(), symbolic_dims->end(), std::back_inserter(symbolic_dims_cstr),
+                   [](const std::string& s) { return s.c_str(); });
+    ThrowOnError(GetApi().SetSymbolicDimensions(p_, symbolic_dims_cstr.data(), symbolic_dims_cstr.size()));
+  }
+}
+
+// static
+inline TypeInfo TypeInfo::CreateTensorInfo(ConstTensorTypeAndShapeInfo tensor_type_and_shape_info) {
+  OrtTypeInfo* output = nullptr;
+  ThrowOnError(GetApi().CreateTensorTypeInfo(tensor_type_and_shape_info, &output));
+  return TypeInfo{output};
+}
+
+// static
+inline TypeInfo TypeInfo::CreateSparseTensorInfo(ConstTensorTypeAndShapeInfo sparse_tensor_type_and_shape_info) {
+  OrtTypeInfo* output = nullptr;
+  ThrowOnError(GetApi().CreateSparseTensorTypeInfo(sparse_tensor_type_and_shape_info, &output));
+  return TypeInfo{output};
+}
+
+// static
+inline TypeInfo TypeInfo::CreateSequenceTypeInfo(ConstTypeInfo sequence_type) {
+  OrtTypeInfo* output;
+  ThrowOnError(GetApi().CreateSequenceTypeInfo(sequence_type, &output));
+  return TypeInfo{output};
+}
+
+// static
+inline TypeInfo TypeInfo::CreateMapTypeInfo(ONNXTensorElementDataType key_type, ConstTypeInfo value_type) {
+  OrtTypeInfo* output;
+  ThrowOnError(GetApi().CreateMapTypeInfo(key_type, value_type, &output));
+  return TypeInfo{output};
+}
+
+// static
+inline TypeInfo TypeInfo::CreateOptionalTypeInfo(ConstTypeInfo contained_type) {
+  OrtTypeInfo* output;
+  ThrowOnError(GetApi().CreateOptionalTypeInfo(contained_type, &output));
+  return TypeInfo{output};
+}
+
 namespace detail {
 
 template <typename T>
@@ -1249,8 +1300,15 @@ inline void TensorTypeAndShapeInfoImpl<T>::GetSymbolicDimensions(const char** va
 }
 
 template <typename T>
+inline std::vector<const char*> TensorTypeAndShapeInfoImpl<T>::GetSymbolicDimensions() const {
+  std::vector<const char*> out(GetDimensionsCount(), nullptr);
+  ThrowOnError(GetApi().GetSymbolicDimensions(this->p_, out.data(), out.size()));
+  return out;
+}
+
+template <typename T>
 inline std::vector<int64_t> TensorTypeAndShapeInfoImpl<T>::GetShape() const {
-  std::vector<int64_t> out(GetDimensionsCount(), 0);
+  std::vector<int64_t> out(GetDimensionsCount(), -1);
   ThrowOnError(GetApi().GetDimensions(this->p_, out.data(), out.size()));
   return out;
 }

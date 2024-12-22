@@ -1242,9 +1242,7 @@ common::Status InferenceSession::ApplyUpdates(const OrtModel& graph_api_model) {
     return status;
   }
 
-  auto& graph = model_->MainGraph().UpdateUsingGraphApiModel(graph_api_model);
-
-  return Status::OK();
+  return model_->MainGraph().UpdateUsingGraphApiModel(graph_api_model);
 }
 
 common::Status InferenceSession::TransformGraph(onnxruntime::Graph& graph, bool saving_model_in_ort_format) {
