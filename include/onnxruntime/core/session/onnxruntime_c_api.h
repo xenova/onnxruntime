@@ -1344,6 +1344,8 @@ struct OrtApi {
    * Create a tensor with user's buffer. You can fill the buffer either before calling this function or after.
    * p_data is owned by caller. ReleaseValue won't release p_data.
    *
+   * If you wish to transfer ownership of p_data to ORT use CreateTensorWithDataAndDeleterAsOrtValue.
+   *
    * \param[in] info Memory description of where the p_data buffer resides (CPU vs GPU etc).
    * \param[in] p_data Pointer to the data buffer.
    * \param[in] p_data_len The number of bytes in the data buffer.

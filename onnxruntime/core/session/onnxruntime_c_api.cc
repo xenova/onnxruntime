@@ -126,17 +126,6 @@ ORT_STATUS_PTR CreateTensorImpl(MLDataType ml_type, const int64_t* shape, size_t
   return nullptr;
 }
 
-ORT_STATUS_PTR CreateTensorImplForSeq(MLDataType elem_type, const int64_t* shape, size_t shape_len, Tensor& out) {
-  OrtAllocator* allocator;
-  // TODO(pranav): what allocator should be used to create the tensor here?
-  // for the sake of simplicity of the API using the default one here
-  ORT_API_RETURN_IF_ERROR(OrtApis::GetAllocatorWithDefaultOptions(&allocator));
-  AllocatorPtr alloc_ptr = std::make_shared<onnxruntime::IAllocatorImplWrappingOrtAllocator>(allocator);
-  TensorShape tensor_shape(shape, shape_len);
-  out = Tensor(elem_type, tensor_shape, std::move(alloc_ptr));
-  return nullptr;
-}
-
 // Create Tensor with existing data. Tensor does not own memory.
 ORT_STATUS_PTR CreateTensorImpl(MLDataType ml_type,
                                 const int64_t* shape, size_t shape_len,

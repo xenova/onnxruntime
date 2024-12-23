@@ -86,8 +86,8 @@ ORT_API_STATUS_IMPL(OrtApis::CastTypeInfoToOptionalTypeInfo, _In_ const OrtTypeI
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(OrtApis::GetDenotationFromTypeInfo, _In_ const OrtTypeInfo* type_info, _Out_ const char** const out,
-                    _Out_ size_t* len) {
+ORT_API_STATUS_IMPL(OrtApis::GetDenotationFromTypeInfo, _In_ const OrtTypeInfo* type_info,
+                    _Out_ const char** const out, _Out_ size_t* len) {
   API_IMPL_BEGIN
   *out = type_info->denotation.c_str();
   *len = type_info->denotation.size();
@@ -115,8 +115,8 @@ ORT_API_STATUS_IMPL(OrtApis::CreateSparseTensorTypeInfo, _In_ const OrtTensorTyp
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(OrtApis::CreateMapTypeInfo, ONNXTensorElementDataType map_key_type, _In_ const OrtTypeInfo* map_value_type,
-                    _Out_ OrtTypeInfo** type_info) {
+ORT_API_STATUS_IMPL(OrtApis::CreateMapTypeInfo, ONNXTensorElementDataType map_key_type,
+                    _In_ const OrtTypeInfo* map_value_type, _Out_ OrtTypeInfo** type_info) {
   API_IMPL_BEGIN
   auto ti = std::make_unique<OrtTypeInfo>(ONNXType::ONNX_TYPE_MAP);
   ti->map_type_info = std::make_unique<OrtMapTypeInfo>(map_key_type, map_value_type->Clone());
@@ -126,7 +126,8 @@ ORT_API_STATUS_IMPL(OrtApis::CreateMapTypeInfo, ONNXTensorElementDataType map_ke
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(OrtApis::CreateSequenceTypeInfo, _In_ const OrtTypeInfo* sequence_type, _Out_ OrtTypeInfo** type_info) {
+ORT_API_STATUS_IMPL(OrtApis::CreateSequenceTypeInfo, _In_ const OrtTypeInfo* sequence_type,
+                    _Out_ OrtTypeInfo** type_info) {
   API_IMPL_BEGIN
   auto ti = std::make_unique<OrtTypeInfo>(ONNXType::ONNX_TYPE_SEQUENCE);
   ti->sequence_type_info = std::make_unique<OrtSequenceTypeInfo>(sequence_type->Clone());
@@ -136,7 +137,8 @@ ORT_API_STATUS_IMPL(OrtApis::CreateSequenceTypeInfo, _In_ const OrtTypeInfo* seq
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(OrtApis::CreateOptionalTypeInfo, _In_ const OrtTypeInfo* contained_type, _Out_ OrtTypeInfo** type_info) {
+ORT_API_STATUS_IMPL(OrtApis::CreateOptionalTypeInfo, _In_ const OrtTypeInfo* contained_type,
+                    _Out_ OrtTypeInfo** type_info) {
   API_IMPL_BEGIN
   auto ti = std::make_unique<OrtTypeInfo>(ONNXType::ONNX_TYPE_OPTIONAL);
   ti->optional_type_info = std::make_unique<OrtOptionalTypeInfo>(contained_type->Clone());
