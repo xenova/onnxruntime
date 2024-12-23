@@ -112,7 +112,8 @@ ORT_API_STATUS_IMPL(OrtModelBuilderAPI::CreateGraph, _Outptr_ OrtGraph** graph) 
   // do some reserves to reduce reallocation. if we had a hint about sizes upfront that would be optimal
   g->inputs.reserve(8);
   g->outputs.reserve(8);
-  g->initializers.reserve(64);
+  g->initializers.reserve(32);
+  g->external_initializers.reserve(32);
   g->nodes.reserve(64);
 
   *graph = g.release();
@@ -152,9 +153,19 @@ ORT_API_STATUS_IMPL(OrtModelBuilderAPI::SetGraphOutputs, _In_ OrtGraph* graph,
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(OrtModelBuilderAPI::AddInitializerToGraph, _In_ OrtGraph* graph, _In_ const char* name, _Inout_ OrtValue* tensor) {
+ORT_API_STATUS_IMPL(OrtModelBuilderAPI::AddInitializerToGraph, _In_ OrtGraph* graph, _In_ const char* name,
+                    _Inout_ OrtValue* tensor, bool data_is_external) {
   API_IMPL_BEGIN
-  graph->initializers[name] = std::unique_ptr<OrtValue>(tensor);  // take ownership
+  if (data_is_external) {
+#if !defined(DISABLE_EXTERNAL_INITIALIZERS)
+    graph->external_initializers[name] = std::unique_ptr<OrtValue>(tensor);  // take ownership
+#else
+    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "External initializers are not supported in this build");
+#endif
+  } else {
+    graph->initializers[name] = std::unique_ptr<OrtValue>(tensor);  // take ownership
+  }
+
   return nullptr;
   API_IMPL_END
 }

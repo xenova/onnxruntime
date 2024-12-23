@@ -1785,6 +1785,19 @@ struct Value : detail::ValueImpl<OrtValue> {
                             const int64_t* shape, size_t shape_len,
                             ONNXTensorElementDataType type);
 
+  /** \brief Creates a tensor with a user supplied buffer. Wraps OrtApi::CreateTensorWithDataAndDeleterAsOrtValue.
+   *
+   * \param deleter OrtAllocator that will be used to free the buffer when no longer required.
+   * \param p_data Pointer to the data buffer.
+   * \param p_data_byte_count The number of bytes in the data buffer.
+   * \param shape Pointer to the tensor shape dimensions.
+   * \param shape_len The number of tensor shape dimensions.
+   * \param type The data type.
+   */
+  static Value CreateTensor(OrtAllocator* deleter, void* p_data, size_t p_data_byte_count,
+                            const int64_t* shape, size_t shape_len,
+                            ONNXTensorElementDataType type);
+
   /** \brief Creates an OrtValue with a tensor using a supplied OrtAllocator. Wraps OrtApi::CreateTensorAsOrtValue.
    *         This overload will allocate the buffer for the tensor according to the supplied shape and data type.
    *         The allocated buffer will be owned by the returned OrtValue and will be freed when the OrtValue is released.
@@ -1810,7 +1823,8 @@ struct Value : detail::ValueImpl<OrtValue> {
    * \param shape_len The number of tensor shape dimensions.
    * \param type The data type.
    */
-  static Value CreateTensor(OrtAllocator* allocator, const int64_t* shape, size_t shape_len, ONNXTensorElementDataType type);
+  static Value CreateTensor(OrtAllocator* allocator, const int64_t* shape, size_t shape_len,
+                            ONNXTensorElementDataType type);
 
   /** \brief Creates an OrtValue with a Map Onnx type representation.
    *  The API would ref-count the supplied OrtValues and they will be released
@@ -2542,9 +2556,6 @@ struct ValueInfoImpl : Ort::detail::Base<T> {
 
   std::string Name() const;
   ConstTypeInfo TypeInfo() const;
-
-  template <typename U>
-  bool operator==(const ValueInfoImpl<U>& o) const;
 };
 }  // namespace detail
 
@@ -2570,9 +2581,6 @@ template <typename T>
 struct NodeImpl : Ort::detail::Base<T> {
   using B = Ort::detail::Base<T>;
   using B::B;
-
-  template <typename U>
-  bool operator==(const NodeImpl<U>& o) const;
 };
 }  // namespace detail
 
@@ -2619,11 +2627,8 @@ struct GraphImpl : Ort::detail::Base<T> {
 
   void SetInputs(std::vector<ValueInfo>& inputs);
   void SetOutputs(std::vector<ValueInfo>& outputs);
-  void AddInitializer(const std::string& name, Value& initializer);  // Graph takes ownership of Value
-  void AddNode(Node& node);                                          // Graph takes ownership of Node
-
-  template <typename U>
-  bool operator==(const GraphImpl<U>& o) const;
+  void AddInitializer(const std::string& name, Value& initializer, bool data_is_external);  // Graph takes ownership of Value
+  void AddNode(Node& node);                                                                 // Graph takes ownership of Node
 };
 }  // namespace detail
 
@@ -2648,9 +2653,6 @@ struct ModelImpl : Ort::detail::Base<T> {
   using B::B;
 
   void AddGraph(Graph& graph);
-
-  template <typename U>
-  bool operator==(const ModelImpl<U>& o) const;
 };
 }  // namespace detail
 

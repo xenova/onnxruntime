@@ -32,7 +32,7 @@ Ort::Session CreateSession(Ort::Env& env,
                                                                   : default_session_options;
 
   // Set this to save the model if you want to debug.
-  // session_options.SetOptimizedModelFilePath(ORT_TSTR("graph_api_model.onnx"));
+  // session_options.SetOptimizedModelFilePath(ORT_TSTR("model_builder_output.onnx"));
 
   Ort::Session session(env, graph_api_model, session_options);
 
@@ -75,8 +75,43 @@ OrtNode* CreateNode(const OrtModelBuilderApi& api,
                                    &node));
   return node;
 }
-
 }  // namespace
+
+struct TestAllocator : public OrtAllocator {
+  TestAllocator() {
+    version = ORT_API_VERSION;
+    Info = [](const struct OrtAllocator* this_ptr) -> const struct OrtMemoryInfo* {
+      auto* test_allocator = static_cast<const TestAllocator*>(this_ptr);
+      return test_allocator->memory_info;
+    };
+
+    Free = [](struct OrtAllocator* allocator, void* p) -> void {
+      auto* test_allocator = static_cast<TestAllocator*>(allocator);
+      // find the matching pointer and remove it
+      auto it = std::find_if(test_allocator->weights.begin(), test_allocator->weights.end(),
+                             [p](const std::unique_ptr<std::vector<float>>& v) { return v->data() == p; });
+      if (it == test_allocator->weights.end()) {
+        throw std::exception("Free called with unknown pointer");
+      }
+
+      test_allocator->weights.erase(it);
+    };
+
+    Alloc = [](struct OrtAllocator* /*this*/, size_t /*size*/) -> void* {
+      throw std::exception("This should not be used");
+    };
+
+    Reserve = [](struct OrtAllocator* /*this*/, size_t /*size*/) -> void* {
+      throw std::exception("This should not be used");
+    };
+  }
+
+  // initializers that are used directly by the model. as there's no copy they must remain valid.
+  // we store them in the test allocator so we can validate that Free is called
+  std::vector<std::unique_ptr<std::vector<float>>> weights;
+  Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtDeviceAllocator,
+                                                           OrtMemType::OrtMemTypeDefault);
+};
 
 // Test the ModelBuilderAPI C api
 // Uses the ORT C++ api for the rest for simplicity
@@ -84,8 +119,7 @@ TEST(ModelBuilderAPITest, Basic_CApi) {
   const auto& api = Ort::GetApi();
   const auto& graph_api = Ort::GetModelBuilderApi();
 
-  // initializers that are used directly by the model. as there's no copy they must remain valid
-  std::vector<std::unique_ptr<std::vector<float>>> weights;
+  TestAllocator deleter;
 
   // return void so we can use ASSERT_* in the lambda
   const auto build_model = [&](bool use_constant_node, OrtModel*& model) -> void {
@@ -153,7 +187,7 @@ TEST(ModelBuilderAPITest, Basic_CApi) {
     std::vector<OrtOpAttr*> node_attributes{alpha_attr};
     OrtNode* node = CreateNode(graph_api, "Gemm", "Gemm1", node_input_names, node_output_names, node_attributes);
 
-    api.ReleaseOpAttr(alpha_attr);  // CreateNode copies an OrtOpAttr instances
+    api.ReleaseOpAttr(alpha_attr);  // CreateNode copies all OrtOpAttr instances
 
     Ort::ThrowOnError(graph_api.AddNodeToGraph(graph, node));
     node = nullptr;  // graph now owns node
@@ -166,18 +200,21 @@ TEST(ModelBuilderAPITest, Basic_CApi) {
       // create an initializer for the Y input. add to `weights` so the memory remains valid
       OrtValue* y_tensor = nullptr;
       std::vector<int64_t> y_dims = {2, 3};
-      weights.emplace_back(std::make_unique<std::vector<float>>(std::initializer_list<float>{1.0f, 2.0f, 3.0f,
-                                                                                             4.0f, 5.0f, 6.0f}));
-      auto& y_values = *weights.back();
+      deleter.weights.emplace_back(
+          std::make_unique<std::vector<float>>(std::initializer_list<float>{1.0f, 2.0f, 3.0f,
+                                                                            4.0f, 5.0f, 6.0f}));
+      auto& y_values = *deleter.weights.back();
       auto info = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
 
       // if you use this API the initializer data MUST remain valid for the lifetime of the InferenceSession
-      Ort::ThrowOnError(api.CreateTensorWithDataAsOrtValue(info,
-                                                           y_values.data(), y_values.size() * sizeof(y_values[0]),
-                                                           y_dims.data(), y_dims.size(),
-                                                           ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
-                                                           &y_tensor));
-      Ort::ThrowOnError(graph_api.AddInitializerToGraph(graph, "Y", y_tensor));
+      Ort::ThrowOnError(
+          api.CreateTensorWithDataAndDeleterAsOrtValue(&deleter,
+                                                       y_values.data(), y_values.size() * sizeof(y_values[0]),
+                                                       y_dims.data(), y_dims.size(),
+                                                       ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
+                                                       &y_tensor));
+
+      Ort::ThrowOnError(graph_api.AddInitializerToGraph(graph, "Y", y_tensor, /*data is external*/ true));
       y_tensor = nullptr;  // graph now owns
 
       std::vector<const char*> domain_names = {onnxruntime::kOnnxDomain};
@@ -208,6 +245,10 @@ TEST(ModelBuilderAPITest, Basic_CApi) {
                        {18.0f, 24.0f, 30.0f,
                         38.0f, 52.0f, 66.0f,
                         58.0f, 80.0f, 102.0f});
+
+  api.ReleaseSession(session.release());
+
+  ASSERT_EQ(deleter.weights.size(), 0) << "All weights should have been freed";
 }
 
 TEST(ModelBuilderAPITest, Basic_CxxApi) {
@@ -225,7 +266,7 @@ TEST(ModelBuilderAPITest, Basic_CxxApi) {
   std::vector<ModelBuilderAPI::ValueInfo> graph_inputs;
   std::vector<ModelBuilderAPI::ValueInfo> graph_outputs;
 
-  // model input
+  // model input. it's {3, 2} but use a symbolic dim to test that works.
   std::vector<int64_t> input_dims({-1, 2});
   std::vector<std::string> input_symbolic_dims({"multiple_of_3", ""});
   TensorTypeAndShapeInfo input_tensor_info(ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
@@ -268,7 +309,7 @@ TEST(ModelBuilderAPITest, Basic_CxxApi) {
 
   // if you use this API the initializer data MUST remain valid for the lifetime of the InferenceSession
   auto y_tensor = Value::CreateTensor(info, y_values.data(), y_values.size(), y_dims.data(), y_dims.size());
-  graph.AddInitializer("Y", y_tensor);
+  graph.AddInitializer("Y", y_tensor, /*data is external*/ true);
 
   std::vector<ModelBuilderAPI::Model::DomainOpsetPair> opsets{{onnxruntime::kOnnxDomain, 18}};
   ModelBuilderAPI::Model model(opsets);
@@ -298,6 +339,10 @@ TEST(ModelBuilderAPITest, BasicModelEdit_CxxApi) {
   //
 
   SessionOptions so;
+
+  // Set this to save the model if you want to debug.
+  so.SetOptimizedModelFilePath(ORT_TSTR("model_builder_output.onnx"));
+
   Session session = Session::CreateModelBuilderSession(*ort_env, TSTR("testdata/mnist.onnx"), so);
 
   ASSERT_EQ(session.GetOpset(""), 8);  // ONNX domain is empty string
@@ -322,7 +367,8 @@ TEST(ModelBuilderAPITest, BasicModelEdit_CxxApi) {
   int64_t to = ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
   attributes.push_back(OpAttr("to", &to, 1, OrtOpAttrType::ORT_OP_ATTR_INT));
 
-  ModelBuilderAPI::Node node("Cast", onnxruntime::kOnnxDomain, new_input_name, {"Int64Input"}, {input_names[0]}, attributes);
+  ModelBuilderAPI::Node node("Cast", onnxruntime::kOnnxDomain, new_input_name, {"Int64Input"}, {input_names[0]},
+                             attributes);
 
   // we're replacing the only input, so we don't need to call session.GetInputTypeInfo(x) to copy other inputs
   // in order to preserve them
@@ -352,16 +398,33 @@ TEST(ModelBuilderAPITest, BasicModelEdit_CxxApi) {
   std::iota(input.values.begin(), input.values.end(), 1);
 
   std::vector<int64_t> expected_dims = {1, 10};
-  TestInference<float>(session, inputs, session.GetOutputNames()[0].c_str(), expected_dims,
-                       {-48.5088f, -1040.2948f, -347.0959f, 101.7392f, 421.3352f, 750.92145f,
-                        231.5060f, -1694.4152f, 681.5623f, 378.1689f});
+  std::vector<float> expected_output = {-48.5088f, -1040.2948f, -347.0959f, 101.7392f, 421.3352f,
+                                        750.92145f, 231.5060f, -1694.4152f, 681.5623f, 378.1689f};
+
+  TestInference<float>(session, inputs, session.GetOutputNames()[0].c_str(), expected_dims, expected_output);
+
+  // double check with original model
+  {
+    SessionOptions expected_so;
+    Session expected_session = Session(*ort_env, TSTR("testdata/mnist.onnx"), expected_so);
+    std::vector<Input<float>> expected_inputs(1);
+    auto& expected_input = expected_inputs[0];
+    expected_input.name = input_names[0].c_str();
+    expected_input.dims = orig_input.GetTensorTypeAndShapeInfo().GetShape();
+    expected_input.values.reserve(size_t(num_values));
+    std::transform(input.values.begin(), input.values.end(), std::back_inserter(expected_input.values),
+                   [&](int64_t value) { return float(value); });
+
+    TestInference<float>(expected_session, expected_inputs, session.GetOutputNames()[0].c_str(),
+                         expected_dims, expected_output);
+  }
 }
 
 /*
 Tests required
 
+- Constant node is converted to initializer
 - Attempt to create invalid model
-- Create symbolic dims for model input or output
 - Edit and change outputs
 - Invalid edit
 - Edit where we change a subset of inputs or outputs.

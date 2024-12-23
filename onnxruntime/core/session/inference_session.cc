@@ -1214,10 +1214,10 @@ common::Status InferenceSession::Load(const OrtModel& graph_api_model) {
 
   // need to go from unique_ptr to shared_ptr when moving into model_
   std::unique_ptr<Model> tmp_model;
-  ORT_RETURN_IF_ERROR(Model::LoadFromGraphApiModel(graph_api_model,
-                                                   HasLocalSchema() ? &custom_schema_registries_ : nullptr,
-                                                   ModelOptions(true, strict_shape_type_inference),
-                                                   *session_logger_, tmp_model));
+  ORT_RETURN_IF_ERROR(Model::LoadFromModelBuilderApiModel(graph_api_model,
+                                                          HasLocalSchema() ? &custom_schema_registries_ : nullptr,
+                                                          ModelOptions(true, strict_shape_type_inference),
+                                                          *session_logger_, tmp_model));
 
   model_ = std::move(tmp_model);
 
@@ -1241,7 +1241,7 @@ common::Status InferenceSession::ApplyUpdates(const OrtModel& graph_api_model) {
     return status;
   }
 
-  return model_->MainGraph().UpdateUsingGraphApiModel(graph_api_model);
+  return model_->MainGraph().UpdateUsingModelBuilderApiModel(graph_api_model);
 }
 
 common::Status InferenceSession::TransformGraph(onnxruntime::Graph& graph, bool saving_model_in_ort_format) {

@@ -38,6 +38,7 @@ struct OrtGraph {
   std::vector<std::unique_ptr<OrtValueInfo>> inputs;
   std::vector<std::unique_ptr<OrtValueInfo>> outputs;
   std::unordered_map<std::string, std::unique_ptr<OrtValue>> initializers;
+  std::unordered_map<std::string, std::unique_ptr<OrtValue>> external_initializers;
   std::vector<std::unique_ptr<OrtNode>> nodes;
 };
 

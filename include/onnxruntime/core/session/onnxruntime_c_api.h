@@ -5160,22 +5160,23 @@ struct OrtModelBuilderApi {
    *    Use CreateTensorWithDataAsOrtValue or CreateTensorWithDataAndDeleterAsOrtValue to create an OrtValue
    *    with a tensor that contains a pointer to the existing data.
    *    User must keep pointer valid for lifetime of the inference session.
+   *    Set `data_is_external` to true.
    *
    * Allocated memory:
    *    Use CreateTensorAsOrtValue (allocates memory) and populate the tensor with the data.
-   *    ORT will own the memory.
-   *
-   *
+   *    Set `data_is_external` to false.
    *
    * \param[in] graph The OrtGraph instance to update.
    * \param[in] name The value name for the initializer.
    * \param[in] tensor The OrtValue instance containing the tensor data.
+   * \param[in] data_is_external Set to true if the data is external and should not be copied.
    *
    * \snippet{doc} snippets.dox OrtStatus Return Value
    *
    * \since Version 1.21.
    */
-  ORT_API2_STATUS(AddInitializerToGraph, _In_ OrtGraph* graph, _In_ const char* name, _Inout_ OrtValue* tensor);
+  ORT_API2_STATUS(AddInitializerToGraph, _In_ OrtGraph* graph, _In_ const char* name, _Inout_ OrtValue* tensor,
+                  bool data_is_external);
 
   /** \brief Add an OrtNode to an OrtGraph
    *

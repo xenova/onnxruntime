@@ -929,11 +929,11 @@ common::Status Model::LoadFromOrtFormat(const fbs::Model& fbs_model,
 }
 
 // static
-common::Status Model::LoadFromGraphApiModel(const OrtModel& graph_api_model,
-                                            const IOnnxRuntimeOpSchemaRegistryList* local_registries,
-                                            const ModelOptions& options,
-                                            const logging::Logger& logger,
-                                            std::unique_ptr<Model>& model) {
+common::Status Model::LoadFromModelBuilderApiModel(const OrtModel& graph_api_model,
+                                                   const IOnnxRuntimeOpSchemaRegistryList* local_registries,
+                                                   const ModelOptions& options,
+                                                   const logging::Logger& logger,
+                                                   std::unique_ptr<Model>& model) {
   model = std::make_unique<Model>();
   model->model_proto_.set_ir_version(ONNX_NAMESPACE::Version::IR_VERSION);
   // The optimizer Initializer class requires a path if external data is used, however in the Graph API usage the
@@ -947,13 +947,13 @@ common::Status Model::LoadFromGraphApiModel(const OrtModel& graph_api_model,
     }
   }
 
-  ORT_RETURN_IF_ERROR(Graph::LoadFromGraphApiModel(*graph_api_model.graph,
-                                                   *model,
-                                                   graph_api_model.domain_to_version,
-                                                   schema_registry,
-                                                   options.strict_shape_type_inference,
-                                                   logger,
-                                                   model->graph_));
+  ORT_RETURN_IF_ERROR(Graph::LoadFromModelBuilderApiModel(*graph_api_model.graph,
+                                                          *model,
+                                                          graph_api_model.domain_to_version,
+                                                          schema_registry,
+                                                          options.strict_shape_type_inference,
+                                                          logger,
+                                                          model->graph_));
 
   return Status::OK();
 }

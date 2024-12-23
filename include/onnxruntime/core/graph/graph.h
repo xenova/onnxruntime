@@ -763,6 +763,10 @@ class Graph {  // NOLINT(clang-analyzer-optin.performance.Padding): preserve exi
   */
   bool GetInitializedTensor(const std::string& tensor_name, const ONNX_NAMESPACE::TensorProto*& value) const;
 
+  /** Populate `value` if an externally allocated OrtValue exists for an initializer with the given name.
+   */
+  bool GetOrtValueInitializer(const std::string& name, OrtValue& value) const;
+
   /** Gets all the initializer tensors in this Graph. */
   const InitializedTensorSet& GetAllInitializedTensors() const noexcept { return name_to_initial_tensor_; }
 
@@ -1449,15 +1453,15 @@ class Graph {  // NOLINT(clang-analyzer-optin.performance.Padding): preserve exi
                                   const OrtFormatLoadOptions& load_options,
                                   const logging::Logger& logger, std::unique_ptr<Graph>& graph);
 
-  static Status LoadFromGraphApiModel(const OrtGraph& api_graph,
-                                      const Model& owning_model,
-                                      const std::unordered_map<std::string, int>& domain_to_version,
-                                      IOnnxRuntimeOpSchemaCollectionPtr schema_registry,
-                                      bool strict_shape_type_inference,
-                                      const logging::Logger& logger,
-                                      std::unique_ptr<Graph>& graph);
+  static Status LoadFromModelBuilderApiModel(const OrtGraph& api_graph,
+                                             const Model& owning_model,
+                                             const std::unordered_map<std::string, int>& domain_to_version,
+                                             IOnnxRuntimeOpSchemaCollectionPtr schema_registry,
+                                             bool strict_shape_type_inference,
+                                             const logging::Logger& logger,
+                                             std::unique_ptr<Graph>& graph);
 
-  Status UpdateUsingGraphApiModel(const OrtModel& api_model);
+  Status UpdateUsingModelBuilderApiModel(const OrtModel& api_model);
 
 #if !defined(ORT_MINIMAL_BUILD) || defined(ORT_EXTENDED_MINIMAL_BUILD)
   const RuntimeOptimizationRecordContainer& RuntimeOptimizations() const {
@@ -1699,7 +1703,7 @@ class Graph {  // NOLINT(clang-analyzer-optin.performance.Padding): preserve exi
     return nodes_[node_index].get();
   }
 
-  Status LoadFromGraphApiModel(const OrtGraph& api_graph, bool updating_existing_graph = false);
+  Status LoadFromModelBuilderApiModel(const OrtGraph& api_graph, bool updating_existing_graph = false);
 
   const Model& owning_model_;
 
@@ -1714,6 +1718,11 @@ class Graph {  // NOLINT(clang-analyzer-optin.performance.Padding): preserve exi
   ONNX_NAMESPACE::GraphProto deserialized_proto_data_;
 
   InitializedTensorSet name_to_initial_tensor_;
+
+  // Initializers that are external to the Graph. e.g. created using Model Builder API from existing memory.
+  // As we need to convert to TensorProto for the optimizers to work and keep the deleter information we store them
+  // in the Graph instance and retrieve during session state finalization.
+  std::unordered_map<std::string, OrtValue> ortvalue_initializers_;
 
   std::unordered_set<std::reference_wrapper<const std::string>,
                      std::hash<std::string>, std::equal_to<std::string>>
@@ -1736,6 +1745,7 @@ class Graph {  // NOLINT(clang-analyzer-optin.performance.Padding): preserve exi
   // in some case, a fused sub-graph will happens multiple times in one model, we use a map
   // to store reusable-schema in lookup.
   InlinedHashMap<std::string, std::reference_wrapper<ONNX_NAMESPACE::OpSchema>> reusable_fused_schema_map_;
+
 #endif  // !defined(ORT_MINIMAL_BUILD)
 
   // Graph nodes.
