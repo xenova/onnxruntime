@@ -7,6 +7,7 @@
 #include "core/flatbuffers/flatbuffers_utils.h"
 #include "core/framework/tensorprotoutils.h"
 #include "core/graph/model.h"
+#include "core/graph/model_builder_api_types.h"
 #include "core/graph/model_load_utils.h"
 
 #ifdef _MSC_VER
@@ -915,6 +916,36 @@ common::Status Model::LoadFromOrtFormat(const fbs::Model& fbs_model,
   ORT_RETURN_IF_ERROR(Graph::LoadFromOrtFormat(*fbs_graph, *model, domain_to_version,
                                                load_options, logger, model->graph_));
 #endif
+  return Status::OK();
+}
+
+// static
+common::Status Model::LoadFromModelBuilderApiModel(const OrtModel& graph_api_model,
+                                                   const IOnnxRuntimeOpSchemaRegistryList* local_registries,
+                                                   const ModelOptions& options,
+                                                   const logging::Logger& logger,
+                                                   std::unique_ptr<Model>& model) {
+  model = std::make_unique<Model>();
+  model->model_proto_.set_ir_version(ONNX_NAMESPACE::Version::IR_VERSION);
+  // The optimizer Initializer class requires a path if external data is used, however in the Graph API usage the
+  // external data is pointing to pre-allocated memory and does not require a path. Set a dummy value to make it happy.
+  model->model_path_ = std::filesystem::path("_GRAPH_API_MODEL_");
+
+  auto schema_registry = std::make_shared<SchemaRegistryManager>();
+  if (local_registries != nullptr) {
+    for (const auto& schema_collection : *local_registries) {
+      schema_registry->RegisterRegistry(schema_collection);
+    }
+  }
+
+  ORT_RETURN_IF_ERROR(Graph::LoadFromModelBuilderApiModel(*graph_api_model.graph,
+                                                          *model,
+                                                          graph_api_model.domain_to_version,
+                                                          schema_registry,
+                                                          options.strict_shape_type_inference,
+                                                          logger,
+                                                          model->graph_));
+
   return Status::OK();
 }
 
