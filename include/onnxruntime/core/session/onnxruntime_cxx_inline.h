@@ -1159,7 +1159,7 @@ inline void SessionImpl<T>::SetEpDynamicOptions(const char* const* keys, const c
 template <typename T>
 inline void SessionImpl<T>::FinalizeModelBuilderSession(const ModelBuilderAPI::Model& model, const SessionOptions& options,
                                                         OrtPrepackedWeightsContainer* prepacked_weights_container) {
-  ThrowOnError(GetModelBuilderApi().ApplyModelToSession(this->p_, model));
+  ThrowOnError(GetModelBuilderApi().ApplyModelToModelBuilderSession(this->p_, model));
   ThrowOnError(GetModelBuilderApi().FinalizeModelBuilderSession(this->p_, options, prepacked_weights_container));
 }
 
