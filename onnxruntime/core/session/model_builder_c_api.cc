@@ -243,8 +243,8 @@ ORT_API_STATUS_IMPL(OrtModelBuilderAPI::CreateSessionFromModel, _In_ const OrtEn
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(OrtModelBuilderAPI::CreateModelBuilderSession, _In_ const OrtEnv* env, _In_ const ORTCHAR_T* model_path,
-                    _In_ const OrtSessionOptions* options,
+ORT_API_STATUS_IMPL(OrtModelBuilderAPI::CreateModelBuilderSession,
+                    _In_ const OrtEnv* env, _In_ const ORTCHAR_T* model_path, _In_ const OrtSessionOptions* options,
                     _Outptr_ OrtSession** out) {
   API_IMPL_BEGIN
   std::unique_ptr<onnxruntime::InferenceSession> session;
@@ -288,7 +288,8 @@ ORT_API_STATUS_IMPL(OrtModelBuilderAPI::CreateModelBuilderSessionFromArray, _In_
   API_IMPL_END
 }
 
-ORT_API_STATUS_IMPL(OrtModelBuilderAPI::ApplyModelToSession, _In_ OrtSession* session, _In_ OrtModel* model) {
+ORT_API_STATUS_IMPL(OrtModelBuilderAPI::ApplyModelToModelBuilderSession,
+                    _In_ OrtSession* session, _In_ OrtModel* model) {
   API_IMPL_BEGIN
   auto sess = reinterpret_cast<onnxruntime::InferenceSession*>(session);
   ORT_API_RETURN_IF_STATUS_NOT_OK(sess->ApplyUpdates(*model));
@@ -332,7 +333,7 @@ static constexpr OrtModelBuilderApi ort_graph_api = {
 
     &OrtModelBuilderAPI::CreateModelBuilderSession,
     &OrtModelBuilderAPI::CreateModelBuilderSessionFromArray,
-    &OrtModelBuilderAPI::ApplyModelToSession,
+    &OrtModelBuilderAPI::ApplyModelToModelBuilderSession,
     &OrtModelBuilderAPI::FinalizeModelBuilderSession,
 };
 

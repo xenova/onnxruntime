@@ -5304,7 +5304,7 @@ struct OrtModelBuilderApi {
    *
    * \since Version 1.21.
    */
-  ORT_API2_STATUS(ApplyModelToSession, _In_ OrtSession* session, _In_ OrtModel* model);
+  ORT_API2_STATUS(ApplyModelToModelBuilderSession, _In_ OrtSession* session, _In_ OrtModel* model);
 
   /** \brief Finalize the Model Builder session.
    *

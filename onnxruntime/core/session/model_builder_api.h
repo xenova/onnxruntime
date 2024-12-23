@@ -51,7 +51,7 @@ ORT_API_STATUS_IMPL(CreateModelBuilderSessionFromArray, _In_ const OrtEnv* env,
                     _In_ const OrtSessionOptions* options,
                     _Outptr_ OrtSession** out);
 
-ORT_API_STATUS_IMPL(ApplyModelToSession, _In_ OrtSession* session, _In_ OrtModel* model);
+ORT_API_STATUS_IMPL(ApplyModelToModelBuilderSession, _In_ OrtSession* session, _In_ OrtModel* model);
 
 ORT_API_STATUS_IMPL(FinalizeModelBuilderSession, _In_ OrtSession* session, _In_ const OrtSessionOptions* options,
                     _Inout_ OrtPrepackedWeightsContainer* prepacked_weights_container);

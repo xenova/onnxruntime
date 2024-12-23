@@ -341,7 +341,7 @@ TEST(ModelBuilderAPITest, BasicModelEdit_CxxApi) {
   SessionOptions so;
 
   // Set this to save the model if you want to debug.
-  so.SetOptimizedModelFilePath(ORT_TSTR("model_builder_output.onnx"));
+  // so.SetOptimizedModelFilePath(ORT_TSTR("model_builder_edited.onnx"));
 
   Session session = Session::CreateModelBuilderSession(*ort_env, TSTR("testdata/mnist.onnx"), so);
 
@@ -351,7 +351,7 @@ TEST(ModelBuilderAPITest, BasicModelEdit_CxxApi) {
   // the original graph is unchanged. nodes can be added before/after it. initializers can be added.
   // new nodes must conform to the original domain:opset of the model.
   // additional operator domain:opset pairs can be added.
-  std::vector<ModelBuilderAPI::Model::DomainOpsetPair> opsets;
+  std::vector<ModelBuilderAPI::Model::DomainOpsetPair> opsets;  // no additional opsets required
   ModelBuilderAPI::Model model(opsets);
 
   std::vector<std::string> input_names = session.GetInputNames();
