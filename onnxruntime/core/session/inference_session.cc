@@ -36,9 +36,9 @@
 #include "core/framework/ort_value_pattern_planner.h"
 #include "core/framework/transform_layout_functions.h"
 #include "core/framework/utils.h"
-#include "core/graph/graph_api_types.h"
 #include "core/graph/graph_viewer.h"
 #include "core/graph/model.h"
+#include "core/graph/model_builder_api_types.h"
 #include "core/optimizer/graph_transformer_utils.h"
 #include "core/optimizer/graph_transformer.h"
 #include "core/optimizer/layout_transformation/layout_transformation.h"
@@ -67,7 +67,6 @@
 #include "core/optimizer/stft_decomposition.h"
 #endif
 #include "core/session/environment.h"
-#include "core/session/graph_apis.h"
 #include "core/session/IOBinding.h"
 #include "core/session/inference_session_utils.h"
 #include "core/session/onnxruntime_session_options_config_keys.h"

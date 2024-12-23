@@ -25,7 +25,7 @@ using namespace Ort;
 namespace {
 
 Ort::Session CreateSession(Ort::Env& env,
-                           GraphApi::Model& graph_api_model,
+                           ModelBuilderAPI::Model& graph_api_model,
                            Ort::SessionOptions* session_options_for_test = nullptr) {
   Ort::SessionOptions default_session_options;
   Ort::SessionOptions& session_options = session_options_for_test ? *session_options_for_test
@@ -37,7 +37,7 @@ Ort::Session CreateSession(Ort::Env& env,
   Ort::Session session(env, graph_api_model, session_options);
 
   // Session should not require the model to stay alive so free it now to validate.
-  graph_api_model = GraphApi::Model(nullptr);
+  graph_api_model = ModelBuilderAPI::Model(nullptr);
 
   return session;
 }
@@ -61,7 +61,7 @@ void TestInference(Ort::Session& session,
 }
 
 // Create OrtNode using the C API
-OrtNode* CreateNode(const OrtGraphApi& api,
+OrtNode* CreateNode(const OrtModelBuilderApi& api,
                     const char* operator_name, const char* node_name,
                     const gsl::span<const char*> input_names,
                     const gsl::span<const char*> output_names,
@@ -78,11 +78,11 @@ OrtNode* CreateNode(const OrtGraphApi& api,
 
 }  // namespace
 
-// Test the GraphApi C api
+// Test the ModelBuilderAPI C api
 // Uses the ORT C++ api for the rest for simplicity
-TEST(GraphApiTest, Basic_CApi) {
+TEST(ModelBuilderAPITest, Basic_CApi) {
   const auto& api = Ort::GetApi();
-  const auto& graph_api = Ort::GetGraphApi();
+  const auto& graph_api = Ort::GetModelBuilderApi();
 
   // initializers that are used directly by the model. as there's no copy they must remain valid
   std::vector<std::unique_ptr<std::vector<float>>> weights;
@@ -201,7 +201,7 @@ TEST(GraphApiTest, Basic_CApi) {
   input.values = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
 
   std::vector<int64_t> expected_dims = {3, 3};
-  GraphApi::Model cxx_model(model);
+  ModelBuilderAPI::Model cxx_model(model);
   auto session = CreateSession(*ort_env, cxx_model);
 
   TestInference<float>(session, inputs, "Z", expected_dims,
@@ -210,11 +210,11 @@ TEST(GraphApiTest, Basic_CApi) {
                         58.0f, 80.0f, 102.0f});
 }
 
-TEST(GraphApiTest, Basic_CxxApi) {
+TEST(ModelBuilderAPITest, Basic_CxxApi) {
   // initializers that are used directly by the model. as there's no copy they must remain valid
   std::vector<std::unique_ptr<std::vector<float>>> weights;
 
-  Ort::GraphApi::Graph graph;
+  Ort::ModelBuilderAPI::Graph graph;
 
   //
   // Create OrtModel with a Gemm. X input is 3x2, Y input is 2x3, Z output is 3x3.
@@ -222,8 +222,8 @@ TEST(GraphApiTest, Basic_CxxApi) {
   // Set the alpha attribute of the Gemm node to 2.0 to test attribute handling.
   //
 
-  std::vector<GraphApi::ValueInfo> graph_inputs;
-  std::vector<GraphApi::ValueInfo> graph_outputs;
+  std::vector<ModelBuilderAPI::ValueInfo> graph_inputs;
+  std::vector<ModelBuilderAPI::ValueInfo> graph_outputs;
 
   // model input
   std::vector<int64_t> input_dims({-1, 2});
@@ -254,7 +254,7 @@ TEST(GraphApiTest, Basic_CxxApi) {
   float alpha_value = 2.0;
   attributes.push_back(OpAttr("alpha", &alpha_value, 1, OrtOpAttrType::ORT_OP_ATTR_FLOAT));
 
-  GraphApi::Node node("Gemm", onnxruntime::kOnnxDomain, "Gemm1", {"X", "Y"}, {"Z"}, attributes);
+  ModelBuilderAPI::Node node("Gemm", onnxruntime::kOnnxDomain, "Gemm1", {"X", "Y"}, {"Z"}, attributes);
 
   graph.AddNode(node);
 
@@ -270,8 +270,8 @@ TEST(GraphApiTest, Basic_CxxApi) {
   auto y_tensor = Value::CreateTensor(info, y_values.data(), y_values.size(), y_dims.data(), y_dims.size());
   graph.AddInitializer("Y", y_tensor);
 
-  std::vector<GraphApi::Model::DomainOpsetPair> opsets{{onnxruntime::kOnnxDomain, 18}};
-  GraphApi::Model model(opsets);
+  std::vector<ModelBuilderAPI::Model::DomainOpsetPair> opsets{{onnxruntime::kOnnxDomain, 18}};
+  ModelBuilderAPI::Model model(opsets);
   model.AddGraph(graph);
 
   std::vector<Input<float>> inputs(1);
@@ -289,7 +289,7 @@ TEST(GraphApiTest, Basic_CxxApi) {
                         58.0f, 80.0f, 102.0f});
 }
 
-TEST(GraphApiTest, BasicModelEdit_CxxApi) {
+TEST(ModelBuilderAPITest, BasicModelEdit_CxxApi) {
   //
   // Load existing model
   // Add Cast to change the model input from float to int64
@@ -306,8 +306,8 @@ TEST(GraphApiTest, BasicModelEdit_CxxApi) {
   // the original graph is unchanged. nodes can be added before/after it. initializers can be added.
   // new nodes must conform to the original domain:opset of the model.
   // additional operator domain:opset pairs can be added.
-  std::vector<GraphApi::Model::DomainOpsetPair> opsets;
-  GraphApi::Model model(opsets);
+  std::vector<ModelBuilderAPI::Model::DomainOpsetPair> opsets;
+  ModelBuilderAPI::Model model(opsets);
 
   std::vector<std::string> input_names = session.GetInputNames();
   ASSERT_EQ(input_names.size(), 1);
@@ -322,17 +322,17 @@ TEST(GraphApiTest, BasicModelEdit_CxxApi) {
   int64_t to = ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
   attributes.push_back(OpAttr("to", &to, 1, OrtOpAttrType::ORT_OP_ATTR_INT));
 
-  GraphApi::Node node("Cast", onnxruntime::kOnnxDomain, new_input_name, {"Int64Input"}, {input_names[0]}, attributes);
+  ModelBuilderAPI::Node node("Cast", onnxruntime::kOnnxDomain, new_input_name, {"Int64Input"}, {input_names[0]}, attributes);
 
   // we're replacing the only input, so we don't need to call session.GetInputTypeInfo(x) to copy other inputs
   // in order to preserve them
-  std::vector<GraphApi::ValueInfo> graph_inputs;
+  std::vector<ModelBuilderAPI::ValueInfo> graph_inputs;
   TensorTypeAndShapeInfo input_tensor_info(ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64,
                                            orig_input.GetTensorTypeAndShapeInfo().GetShape());
   auto input_type_info = TypeInfo::CreateTensorInfo(input_tensor_info.GetConst());
   graph_inputs.emplace_back(new_input_name, input_type_info.GetConst());
 
-  GraphApi::Graph graph;  // new info to augment the model with
+  ModelBuilderAPI::Graph graph;  // new info to augment the model with
 
   graph.AddNode(node);
   graph.SetInputs(graph_inputs);

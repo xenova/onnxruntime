@@ -1,7 +1,7 @@
-namespace OrtGraphApis {
+namespace OrtModelBuilderAPI {
 
 // implementation that returns the API struct
-ORT_API(const OrtGraphApi*, GetGraphApi);
+ORT_API(const OrtModelBuilderApi*, GetModelBuilderApi);
 
 ORT_API_STATUS_IMPL(CreateValueInfo, _In_ const char* name, _In_ const OrtTypeInfo* type_info,
                     _Outptr_ OrtValueInfo** value_info);
@@ -55,4 +55,4 @@ ORT_API_STATUS_IMPL(ApplyModelToSession, _In_ OrtSession* session, _In_ OrtModel
 ORT_API_STATUS_IMPL(FinalizeModelBuilderSession, _In_ OrtSession* session, _In_ const OrtSessionOptions* options,
                     _Inout_ OrtPrepackedWeightsContainer* prepacked_weights_container);
 
-}  // namespace OrtGraphApis
+}  // namespace OrtModelBuilderAPI

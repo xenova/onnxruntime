@@ -33,11 +33,11 @@
 #include "core/session/abi_session_options_impl.h"
 #include "core/session/allocator_adapters.h"
 #include "core/session/environment.h"
-#include "core/session/graph_apis.h"
 #include "core/session/inference_session.h"
 #include "core/session/inference_session_utils.h"
 #include "core/session/IOBinding.h"
 #include "core/session/lora_adapters.h"
+#include "core/session/model_builder_api.h"
 #include "core/session/onnxruntime_c_api.h"
 #include "core/session/ort_apis.h"
 #include "core/session/ort_env.h"
@@ -2395,8 +2395,8 @@ ORT_API(const OrtTrainingApi*, OrtApis::GetTrainingApi, uint32_t version) {
 #endif
 }
 
-ORT_API(const OrtGraphApi*, OrtApis::GetGraphApi) {
-  return OrtGraphApis::GetGraphApi();
+ORT_API(const OrtModelBuilderApi*, OrtApis::GetModelBuilderApi) {
+  return OrtModelBuilderAPI::GetModelBuilderApi();
 }
 
 static constexpr OrtApiBase ort_api_base = {
@@ -2786,12 +2786,12 @@ static constexpr OrtApi ort_api_1_to_21 = {
     &OrtApis::SetEpDynamicOptions,
     // End of Version 20 - DO NOT MODIFY ABOVE (see above text for more information)
 
-    &OrtApis::GetGraphApi,
+    &OrtApis::GetModelBuilderApi,
 
     &OrtApis::CreateTensorWithDataAndDeleterAsOrtValue,
     &OrtApis::SessionGetOpsetForDomain,
 
-    // APIs to create/edit type info when building/modifying a model using the Graph API
+    // APIs to create/edit type info when building/modifying a model using the Model Builder API
     &OrtApis::CreateTensorTypeInfo,
     &OrtApis::CreateSparseTensorTypeInfo,
     &OrtApis::CreateMapTypeInfo,

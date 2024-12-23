@@ -6,8 +6,8 @@
 #include "core/flatbuffers/schema/ort.fbs.h"
 #include "core/flatbuffers/flatbuffers_utils.h"
 #include "core/framework/tensorprotoutils.h"
-#include "core/graph/graph_api_types.h"
 #include "core/graph/model.h"
+#include "core/graph/model_builder_api_types.h"
 #include "core/graph/model_load_utils.h"
 
 #ifdef _MSC_VER

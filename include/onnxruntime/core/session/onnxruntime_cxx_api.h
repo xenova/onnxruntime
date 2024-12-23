@@ -145,10 +145,10 @@ std::string GetBuildInfoString();
 std::vector<std::string> GetAvailableProviders();
 
 /// <summary>
-/// This returns a reference to the ORT C Graph API. Used if building a model at runtime.
+/// This returns a reference to the ORT C Model Builder API. Used if building or augmenting a model at runtime.
 /// </summary>
-/// <returns>ORT C GraphApi reference</returns>
-inline const OrtGraphApi& GetGraphApi() noexcept { return *GetApi().GetGraphApi(); }
+/// <returns>ORT C Model Builder API reference</returns>
+inline const OrtModelBuilderApi& GetModelBuilderApi() noexcept { return *GetApi().GetModelBuilderApi(); }
 
 /** \brief IEEE 754 half-precision floating point data type
  *
@@ -534,7 +534,7 @@ ORT_DEFINE_RELEASE(KernelInfo);
 #undef ORT_DEFINE_RELEASE
 
 #define ORT_DEFINE_GRAPH_API_RELEASE(NAME) \
-  inline void OrtRelease(Ort##NAME* ptr) { GetGraphApi().Release##NAME(ptr); }
+  inline void OrtRelease(Ort##NAME* ptr) { GetModelBuilderApi().Release##NAME(ptr); }
 
 ORT_DEFINE_GRAPH_API_RELEASE(ValueInfo);
 ORT_DEFINE_GRAPH_API_RELEASE(Node);
@@ -657,7 +657,7 @@ struct TypeInfo;
 struct Value;
 struct ModelMetadata;
 
-namespace GraphApi {
+namespace ModelBuilderAPI {
 struct Model;
 }
 
@@ -1190,7 +1190,7 @@ struct SessionImpl : ConstSessionImpl<T> {
    */
   void SetEpDynamicOptions(const char* const* keys, const char* const* values, size_t kv_len);
 
-  void FinalizeModelBuilderSession(const GraphApi::Model& model, const SessionOptions& options,
+  void FinalizeModelBuilderSession(const ModelBuilderAPI::Model& model, const SessionOptions& options,
                                    OrtPrepackedWeightsContainer* prepacked_weights_container = nullptr);
 };
 
@@ -1220,13 +1220,13 @@ struct Session : detail::SessionImpl<OrtSession> {
   Session(const Env& env, const void* model_data, size_t model_data_length, const SessionOptions& options,
           OrtPrepackedWeightsContainer* prepacked_weights_container);
 
-  /// Wraps OrtGraphApi::CreateSessionFromModel
-  Session(const Env& env, const GraphApi::Model& model, const SessionOptions& options);
+  /// Wraps OrtModelBuilderApi::CreateSessionFromModel
+  Session(const Env& env, const ModelBuilderAPI::Model& model, const SessionOptions& options);
 
-  /// Wraps OrtGraphApi::CreateModelBuilderSession
+  /// Wraps OrtModelBuilderApi::CreateModelBuilderSession
   static Session CreateModelBuilderSession(const Env& env, const ORTCHAR_T* model_path, const SessionOptions& options);
 
-  /// Wraps OrtGraphApi::CreateModelBuilderSession
+  /// Wraps OrtModelBuilderApi::CreateModelBuilderSession
   static Session CreateModelBuilderSession(const Env& env, const void* model_data, size_t model_data_length,
                                            const SessionOptions& options);
 
@@ -1260,7 +1260,7 @@ using ConstMemoryInfo = detail::MemoryInfoImpl<detail::Unowned<const OrtMemoryIn
 struct MemoryInfo : detail::MemoryInfoImpl<OrtMemoryInfo> {
   static MemoryInfo CreateCpu(OrtAllocatorType type, OrtMemType mem_type1);
   explicit MemoryInfo(std::nullptr_t) {}                                       ///< No instance is created
-  explicit MemoryInfo(OrtMemoryInfo* p) : MemoryInfoImpl<OrtMemoryInfo>{p} {}  ///< Take ownership of a pointer created by C Api
+  explicit MemoryInfo(OrtMemoryInfo* p) : MemoryInfoImpl<OrtMemoryInfo>{p} {}  ///< Take ownership of a pointer created by C API
   MemoryInfo(const char* name, OrtAllocatorType type, int id, OrtMemType mem_type);
   ConstMemoryInfo GetConst() const { return ConstMemoryInfo{this->p_}; }
 };
@@ -2532,7 +2532,7 @@ struct CustomOpBase : OrtCustomOp {
 //
 // Graph API C++ wrappers
 //
-namespace GraphApi {
+namespace ModelBuilderAPI {
 
 namespace detail {
 template <typename T>
@@ -2555,8 +2555,9 @@ using ConstValueInfo = detail::ValueInfoImpl<Ort::detail::Unowned<const OrtValue
  *
  */
 struct ValueInfo : detail::ValueInfoImpl<OrtValueInfo> {
-  explicit ValueInfo(std::nullptr_t) {}                                    ///< No instance is created
-  explicit ValueInfo(OrtValueInfo* p) : ValueInfoImpl<OrtValueInfo>{p} {}  ///< Take ownership of a pointer created by C Api
+  explicit ValueInfo(std::nullptr_t) {}  ///< No instance is created
+  /// Take ownership of a pointer created by C API
+  explicit ValueInfo(OrtValueInfo* p) : ValueInfoImpl<OrtValueInfo>{p} {}
 
   // Create ValueInfo for a tensor
   explicit ValueInfo(const std::string& name, ConstTypeInfo& type_info);
@@ -2583,7 +2584,7 @@ using ConstNode = detail::NodeImpl<Ort::detail::Unowned<const OrtNode>>;
  */
 struct Node : detail::NodeImpl<OrtNode> {
   explicit Node(std::nullptr_t) {}                     ///< No instance is created
-  explicit Node(OrtNode* p) : NodeImpl<OrtNode>{p} {}  ///< Take ownership of a pointer created by C Api
+  explicit Node(OrtNode* p) : NodeImpl<OrtNode>{p} {}  ///< Take ownership of a pointer created by C API
 
   Node(const std::string& operator_name, const std::string& operator_domain,
        const std::string& node_name,
@@ -2634,7 +2635,7 @@ using ConstGraph = detail::GraphImpl<Ort::detail::Unowned<const OrtGraph>>;
  */
 struct Graph : detail::GraphImpl<OrtGraph> {
   explicit Graph(std::nullptr_t) {}                        ///< No instance is created
-  explicit Graph(OrtGraph* p) : GraphImpl<OrtGraph>{p} {}  ///< Take ownership of a pointer created by C Api
+  explicit Graph(OrtGraph* p) : GraphImpl<OrtGraph>{p} {}  ///< Take ownership of a pointer created by C API
   Graph();
 
   ConstGraph GetConst() const { return ConstGraph{this->p_}; }
@@ -2663,12 +2664,12 @@ struct Model : detail::ModelImpl<OrtModel> {
   using DomainOpsetPair = std::pair<std::string, int>;
 
   explicit Model(std::nullptr_t) {}                        ///< No instance is created
-  explicit Model(OrtModel* p) : ModelImpl<OrtModel>{p} {}  ///< Take ownership of a pointer created by C Api
+  explicit Model(OrtModel* p) : ModelImpl<OrtModel>{p} {}  ///< Take ownership of a pointer created by C API
   Model(const std::vector<DomainOpsetPair>& opsets);
 
   ConstModel GetConst() const { return ConstModel{this->p_}; }
 };
-}  // namespace GraphApi
+}  // namespace ModelBuilderAPI
 
 }  // namespace Ort
 

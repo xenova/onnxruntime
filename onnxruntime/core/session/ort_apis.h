@@ -534,7 +534,7 @@ ORT_API_STATUS_IMPL(RunOptionsAddActiveLoraAdapter, _Inout_ OrtRunOptions* optio
 ORT_API_STATUS_IMPL(SetEpDynamicOptions, _Inout_ OrtSession* sess, _In_reads_(kv_len) const char* const* keys,
                     _In_reads_(kv_len) const char* const* values, _In_ size_t kv_len);
 
-ORT_API(const OrtGraphApi*, GetGraphApi);
+ORT_API(const OrtModelBuilderApi*, GetModelBuilderApi);
 
 ORT_API_STATUS_IMPL(CreateTensorWithDataAndDeleterAsOrtValue, _In_ OrtAllocator* deleter,
                     _In_ void* p_data, size_t p_data_len,
