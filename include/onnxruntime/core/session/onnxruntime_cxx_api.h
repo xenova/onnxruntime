@@ -2571,7 +2571,7 @@ struct ValueInfo : detail::ValueInfoImpl<OrtValueInfo> {
   explicit ValueInfo(OrtValueInfo* p) : ValueInfoImpl<OrtValueInfo>{p} {}
 
   // Create ValueInfo for a tensor
-  explicit ValueInfo(const std::string& name, ConstTypeInfo& type_info);
+  explicit ValueInfo(const std::string& name, const ConstTypeInfo& type_info);
 
   ConstValueInfo GetConst() const { return ConstValueInfo{this->p_}; }
 };

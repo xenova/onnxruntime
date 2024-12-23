@@ -5,6 +5,8 @@
 
 #include "core/session/onnxruntime_cxx_api.h"
 
+#include "gtest/gtest.h"
+
 OrtCUDAProviderOptions CreateDefaultOrtCudaProviderOptionsWithCustomStream(void* cuda_compute_stream = nullptr);
 
 template <typename T = float>

@@ -91,18 +91,18 @@ struct TestAllocator : public OrtAllocator {
       auto it = std::find_if(test_allocator->weights.begin(), test_allocator->weights.end(),
                              [p](const std::unique_ptr<std::vector<float>>& v) { return v->data() == p; });
       if (it == test_allocator->weights.end()) {
-        throw std::exception("Free called with unknown pointer");
+        throw std::runtime_error("Free called with unknown pointer");
       }
 
       test_allocator->weights.erase(it);
     };
 
     Alloc = [](struct OrtAllocator* /*this*/, size_t /*size*/) -> void* {
-      throw std::exception("This should not be used");
+      throw std::runtime_error("This should not be used");
     };
 
     Reserve = [](struct OrtAllocator* /*this*/, size_t /*size*/) -> void* {
-      throw std::exception("This should not be used");
+      throw std::runtime_error("This should not be used");
     };
   }
 

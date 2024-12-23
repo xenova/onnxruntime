@@ -2396,7 +2396,7 @@ inline Model::Model(const std::vector<DomainOpsetPair>& opsets) {
   ThrowOnError(GetModelBuilderApi().CreateModel(domains.data(), versions.data(), opsets.size(), &p_));
 }
 
-inline ValueInfo::ValueInfo(const std::string& name, ConstTypeInfo& type_info) {
+inline ValueInfo::ValueInfo(const std::string& name, const ConstTypeInfo& type_info) {
   ThrowOnError(GetModelBuilderApi().CreateValueInfo(name.c_str(), type_info, &p_));
 }
 namespace detail {
@@ -2454,6 +2454,7 @@ inline void GraphImpl<OrtGraph>::AddNode(Node& node) {
   ThrowOnError(GetModelBuilderApi().AddNodeToGraph(p_, node.release()));
 }
 
+template <>
 inline void ModelImpl<OrtModel>::AddGraph(Graph& graph) {
   // Model takes ownership of `graph`
   ThrowOnError(GetModelBuilderApi().AddGraphToModel(p_, graph.release()));
