@@ -1005,7 +1005,7 @@ inline std::vector<std::string> ConstSessionImpl<T>::GetInputNames() const {
 
   for (size_t i = 0; i < num_inputs; ++i) {
     char* name = nullptr;
-    ThrowOnError(GetApi().SessionGetInputName(p_, i, allocator, &name));
+    ThrowOnError(GetApi().SessionGetInputName(this->p_, i, allocator, &name));
     input_names.push_back(name);
   }
 
@@ -1022,7 +1022,7 @@ inline std::vector<std::string> ConstSessionImpl<T>::GetOutputNames() const {
 
   for (size_t i = 0; i < num_inputs; ++i) {
     char* name = nullptr;
-    ThrowOnError(GetApi().SessionGetOutputName(p_, i, allocator, &name));
+    ThrowOnError(GetApi().SessionGetOutputName(this->p_, i, allocator, &name));
     output_names.push_back(name);
   }
 
@@ -1039,7 +1039,7 @@ inline std::vector<std::string> ConstSessionImpl<T>::GetOverridableInitializerNa
 
   for (size_t i = 0; i < num_initializers; ++i) {
     char* name = nullptr;
-    ThrowOnError(GetApi().SessionGetOverridableInitializerName(p_, i, allocator, &name));
+    ThrowOnError(GetApi().SessionGetOverridableInitializerName(this->p_, i, allocator, &name));
     initializer_names.push_back(name);
   }
 
@@ -1159,7 +1159,7 @@ inline void SessionImpl<T>::SetEpDynamicOptions(const char* const* keys, const c
 template <typename T>
 inline void SessionImpl<T>::FinalizeModelBuilderSession(const ModelBuilderAPI::Model& model, const SessionOptions& options,
                                                         OrtPrepackedWeightsContainer* prepacked_weights_container) {
-  ThrowOnError(GetModelBuilderApi().ApplyModelToModelBuilderSession(this->p_, model));
+  ThrowOnError(GetModelBuilderApi().ApplyModelToSession(this->p_, model));
   ThrowOnError(GetModelBuilderApi().FinalizeModelBuilderSession(this->p_, options, prepacked_weights_container));
 }
 
@@ -2400,18 +2400,21 @@ inline ValueInfo::ValueInfo(const std::string& name, ConstTypeInfo& type_info) {
   ThrowOnError(GetModelBuilderApi().CreateValueInfo(name.c_str(), type_info, &p_));
 }
 namespace detail {
+template <>
 inline std::string ValueInfoImpl<OrtValueInfo>::Name() const {
   const char* name = nullptr;
-  ThrowOnError(GetModelBuilderApi().GetValueInfoName(p_, &name));
+  ThrowOnError(GetModelBuilderApi().GetValueInfoName(this->p_, &name));
   return name;
 }
 
+template <>
 inline ConstTypeInfo ValueInfoImpl<OrtValueInfo>::TypeInfo() const {
   const OrtTypeInfo* type_info = nullptr;
-  ThrowOnError(GetModelBuilderApi().GetValueInfoTypeInfo(p_, &type_info));
+  ThrowOnError(GetModelBuilderApi().GetValueInfoTypeInfo(this->p_, &type_info));
   return ConstTypeInfo{type_info};
 }
 
+template <>
 inline void GraphImpl<OrtGraph>::SetInputs(std::vector<ValueInfo>& inputs) {
   std::vector<OrtValueInfo*> inputs_ptrs;
   inputs_ptrs.reserve(inputs.size());
@@ -2426,6 +2429,7 @@ inline void GraphImpl<OrtGraph>::SetInputs(std::vector<ValueInfo>& inputs) {
   std::for_each(inputs.begin(), inputs.end(), [](ValueInfo& vi) { vi.release(); });
 }
 
+template <>
 inline void GraphImpl<OrtGraph>::SetOutputs(std::vector<ValueInfo>& outputs) {
   std::vector<OrtValueInfo*> outputs_ptrs;
   outputs_ptrs.reserve(outputs.size());
@@ -2438,11 +2442,13 @@ inline void GraphImpl<OrtGraph>::SetOutputs(std::vector<ValueInfo>& outputs) {
   std::for_each(outputs.begin(), outputs.end(), [](ValueInfo& vi) { vi.release(); });
 }
 
+template <>
 inline void GraphImpl<OrtGraph>::AddInitializer(const std::string& name, Value& initializer, bool data_is_external) {
   // Graph takes ownership of `initializer`
   ThrowOnError(GetModelBuilderApi().AddInitializerToGraph(p_, name.c_str(), initializer.release(), data_is_external));
 }
 
+template <>
 inline void GraphImpl<OrtGraph>::AddNode(Node& node) {
   // Graph takes ownership of `node`
   ThrowOnError(GetModelBuilderApi().AddNodeToGraph(p_, node.release()));
