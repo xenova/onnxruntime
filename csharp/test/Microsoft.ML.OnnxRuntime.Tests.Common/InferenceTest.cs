@@ -2078,6 +2078,41 @@ namespace Microsoft.ML.OnnxRuntime.Tests
                 }
             }
         }
+
+        [Fact(DisplayName = "TestModelRunAsyncUnallocatedOutputTask")]
+        private async Task TestModelRunAsyncTask()
+        {
+            Float16[] inputData = { new Float16(15360), new Float16(16384), new Float16(16896), new Float16(17408), new Float16(17664) };
+            long[] shape = { 1, 5 };
+
+            var inputNames = new List<string> { "input" };
+            var inputValues = new List<OrtValue> { OrtValue.CreateTensorValueFromMemory(inputData, shape) };
+
+            var outputNames = new List<string> { "output" };
+            var outputValues = new List<OrtValue> { OrtValue.CreateAllocatedTensorValue(OrtAllocator.DefaultInstance,
+                    TensorElementType.Float16, shape) };
+
+            var model = TestDataLoader.LoadModelFromEmbeddedResource("test_types_FLOAT16.onnx");
+            using (SessionOptions opt = new SessionOptions())
+            {
+                opt.IntraOpNumThreads = 2;
+                using (var session = new InferenceSession(model, opt))
+                {
+                    try
+                    {
+                        var task = session.RunAsync(null, inputNames, inputValues, outputNames, outputValues);
+                        var outputs = await task;
+                        var valueOut = outputs.ElementAt<OrtValue>(0);
+                        var float16s = valueOut.GetTensorDataAsSpan<Float16>().ToArray();
+                        Assert.Equal(new Float16(16896), float16s[2]);
+                    }
+                    catch
+                    {
+                        Assert.True(false);
+                    }
+                }
+            }
+        }
 #endif
 
         [Fact(DisplayName = "TestModelRunAsyncTaskFail")]
