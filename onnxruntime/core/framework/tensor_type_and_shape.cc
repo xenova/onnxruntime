@@ -52,6 +52,10 @@ ORT_API_STATUS_IMPL(OrtApis::SetTensorElementType, _Inout_ OrtTensorTypeAndShape
 ORT_API_STATUS_IMPL(OrtApis::SetDimensions, OrtTensorTypeAndShapeInfo* info,
                     _In_ const int64_t* dim_values, size_t dim_count) {
   API_IMPL_BEGIN
+  if (std::any_of(dim_values, dim_values + dim_count, [](int64_t v) { return v < -1; })) {
+    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "dim_values must be -1 (symbolic dimension) or larger.");
+  }
+
   auto num_dims = std::max(dim_count, info->dim_params.size());
 
   // make shape and dim_values consistent
@@ -84,10 +88,6 @@ ORT_API_STATUS_IMPL(OrtApis::GetDimensionsCount, _In_ const struct OrtTensorType
 
 ORT_API_STATUS_IMPL(OrtApis::GetDimensions, _In_ const struct OrtTensorTypeAndShapeInfo* info,
                     _Out_ int64_t* dim_values, size_t dim_values_length) {
-  if (std::any_of(dim_values, dim_values + dim_values_length, [](int64_t v) { return v < -1; })) {
-    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "dim_values must be -1 (symbolic dimension) or larger.");
-  }
-
   info->shape.CopyDims(dim_values, dim_values_length);
   return nullptr;
 }
