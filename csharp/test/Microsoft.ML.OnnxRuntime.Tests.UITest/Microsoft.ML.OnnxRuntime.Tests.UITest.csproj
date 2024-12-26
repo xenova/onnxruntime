@@ -72,6 +72,10 @@
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 			<PrivateAssets>all</PrivateAssets>
 		</PackageReference>
+		<PackageReference Include="xunit.analyzers" Version="1.17.0">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
 	</ItemGroup>
 
 	<!-- Android -->
@@ -98,7 +102,7 @@
 		<None Include="**\Windows\**\*.cs" Exclude="$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder)" />
 	</ItemGroup>
 
-	<PropertyGroup>
+	<PropertyGroup Condition="$(IsAndroidTarget)!='true'">
 		<GenerateProgramFile>false</GenerateProgramFile>
 		<DefaultLanguage>en-us</DefaultLanguage>
 	</PropertyGroup>
