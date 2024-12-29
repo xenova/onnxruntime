@@ -10,6 +10,7 @@
 #include "core/session/inference_session.h"
 #include "core/session/inference_session_utils.h"
 #include "core/session/onnxruntime_c_api.h"
+#include "core/session/ort_apis.h"
 #include "core/session/ort_env.h"
 
 using namespace onnxruntime;

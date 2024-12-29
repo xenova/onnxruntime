@@ -197,7 +197,8 @@ TEST(ModelBuilderAPITest, Basic_CApi) {
     Ort::ThrowOnError(api.CreateOpAttr("alpha", &alpha_value, 1, OrtOpAttrType::ORT_OP_ATTR_FLOAT, &alpha_attr));
 
     std::vector<const char*> node_input_names = {"X", "Y"};
-    std::vector<const char*> node_output_names = {"Z"};
+    const std::string gemm_output_name = use_constant_node ? "Z_temp" : "Z";
+    std::vector<const char*> node_output_names = {gemm_output_name.c_str()};
     std::vector<OrtOpAttr*> node_attributes{alpha_attr};
     OrtNode* node = CreateNode(graph_api, "Gemm", "Gemm1", node_input_names, node_output_names, node_attributes);
 
@@ -213,41 +214,44 @@ TEST(ModelBuilderAPITest, Basic_CApi) {
                                                                           4.0f, 5.0f, 6.0f}));
     auto& y_values = *deleter.weights.back();
 
+    // create an initializer for the Y input. add to `weights` so the memory remains valid
+    OrtValue* y_tensor = nullptr;
+    auto info = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
+
+    // if you use this API the initializer data MUST remain valid for the lifetime of the InferenceSession
+    Ort::ThrowOnError(
+        api.CreateTensorWithDataAndDeleterAsOrtValue(&deleter,
+                                                     y_values.data(), y_values.size() * sizeof(y_values[0]),
+                                                     y_dims.data(), y_dims.size(),
+                                                     ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
+                                                     &y_tensor));
+
+    Ort::ThrowOnError(graph_api.AddInitializerToGraph(graph, "Y", y_tensor, /*data is external*/ true));
+    y_tensor = nullptr;  // graph now owns
+
     if (use_constant_node) {
       // Test that a Constant node is converted to an intializer
 
-      // create an attribute for the Y input
-      // create Constant node that produces "Y" output with the value_floats attribute
+      // create Constant node that is used as the Max in a Clip to limit the output
       OrtOpAttr* value_attr = nullptr;
-      int bytes = onnxruntime::narrow<int>(y_values.size() * sizeof(y_values[0]));
-      Ort::ThrowOnError(api.CreateOpAttr("value", y_values.data(), bytes, ORT_OP_ATTR_FLOAT, &value_attr));
+      float max = 60.0f;
+      Ort::ThrowOnError(api.CreateOpAttr("value", &max, sizeof(max), ORT_OP_ATTR_FLOAT, &value_attr));
 
-      node = CreateNode(graph_api, "Constant", "Y_constant", {}, {"Y"}, {value_attr});
+      node = CreateNode(graph_api, "Constant", "clip_max", {}, {"max"}, {value_attr});
       Ort::ThrowOnError(graph_api.AddNodeToGraph(graph, node));
       node = nullptr;  // graph now owns node
-    } else {
-      // create an initializer for the Y input. add to `weights` so the memory remains valid
-      OrtValue* y_tensor = nullptr;
-      auto info = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
 
-      // if you use this API the initializer data MUST remain valid for the lifetime of the InferenceSession
-      Ort::ThrowOnError(
-          api.CreateTensorWithDataAndDeleterAsOrtValue(&deleter,
-                                                       y_values.data(), y_values.size() * sizeof(y_values[0]),
-                                                       y_dims.data(), y_dims.size(),
-                                                       ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
-                                                       &y_tensor));
-
-      Ort::ThrowOnError(graph_api.AddInitializerToGraph(graph, "Y", y_tensor, /*data is external*/ true));
-      y_tensor = nullptr;  // graph now owns
-
-      std::vector<const char*> domain_names = {onnxruntime::kOnnxDomain};
-      std::vector<int> opset_versions = {18};
-      Ort::ThrowOnError(graph_api.CreateModel(domain_names.data(), opset_versions.data(), domain_names.size(),
-                                              &model));
-      Ort::ThrowOnError(graph_api.AddGraphToModel(model, graph));
-      graph = nullptr;  // model now owns
+      node = CreateNode(graph_api, "Clip", "Clip1", {gemm_output_name.c_str(), "", "max"}, {"Z"});
+      Ort::ThrowOnError(graph_api.AddNodeToGraph(graph, node));
+      node = nullptr;  // graph now owns node
     }
+
+    std::vector<const char*> domain_names = {onnxruntime::kOnnxDomain};
+    std::vector<int> opset_versions = {18};
+    Ort::ThrowOnError(graph_api.CreateModel(domain_names.data(), opset_versions.data(), domain_names.size(),
+                                            &model));
+    Ort::ThrowOnError(graph_api.AddGraphToModel(model, graph));
+    graph = nullptr;  // model now owns
   };
 
   auto run_test = [&](bool use_constant_node) -> void {
@@ -266,15 +270,26 @@ TEST(ModelBuilderAPITest, Basic_CApi) {
     ModelBuilderAPI::Model cxx_model(model);
     auto session = CreateSession(*ort_env, cxx_model);
 
-    TestInference<float>(session, inputs, "Z", expected_dims,
-                         {18.0f, 24.0f, 30.0f,
-                          38.0f, 52.0f, 66.0f,
-                          58.0f, 80.0f, 102.0f});
+    std::vector<float> expected_output;
+    if (use_constant_node) {
+      expected_output = {18.0f, 24.0f, 30.0f,
+                         38.0f, 52.0f, 60.0f,   // clipped
+                         58.0f, 60.0f, 60.0f};  // clipped
+    } else {
+      expected_output = {18.0f, 24.0f, 30.0f,
+                         38.0f, 52.0f, 66.0f,
+                         58.0f, 80.0f, 102.0f};
+    }
+
+    TestInference<float>(session, inputs, "Z", expected_dims, expected_output);
 
     api.ReleaseSession(session.release());
 
     ASSERT_EQ(deleter.weights.size(), 0) << "All weights should have been freed";
   };
+
+  run_test(false);
+  run_test(true);  // use Constant node for initializer
 }
 
 TEST(ModelBuilderAPITest, Basic_CxxApi) {

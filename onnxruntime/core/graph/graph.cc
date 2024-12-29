@@ -5833,7 +5833,6 @@ Status Graph::LoadFromModelBuilderApiModel(const OrtGraph& api_graph, bool updat
       NodeProto node_proto;
 
       // 'Constant' node has no inputs or attributes
-      assert(node.input_names.empty() && node.attributes.empty());
       ORT_RETURN_IF_NOT(node.input_names.empty() && node.attributes.size() == 1 && node.output_names.size() == 1,
                         node.node_name,
                         " is an invalid 'Constant' node. "
