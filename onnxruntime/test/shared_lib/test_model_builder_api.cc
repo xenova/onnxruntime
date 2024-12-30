@@ -474,15 +474,6 @@ TEST(ModelBuilderAPITest, InvalidDimension) {
   }
 }
 
-TEST(ModelBuilderAPITest, TestSqueezenet) {
-  static constexpr PATH_TYPE MODEL_URI = TSTR("testdata/squeezenet/model.onnx");
-
-  SessionOptions so;
-  Ort::Session session(*ort_env, MODEL_URI, so);
-
-  auto in0 = session.GetInputTypeInfo(0);
-}
-
 /*
 Tests required
 

@@ -53,14 +53,7 @@ ORT_API_STATUS_IMPL(OrtApis::SetDimensions, OrtTensorTypeAndShapeInfo* info,
                     _In_ const int64_t* dim_values, size_t dim_count) {
   API_IMPL_BEGIN
   if (std::any_of(dim_values, dim_values + dim_count, [](int64_t v) { return v < -1; })) {
-    std::string dim_str = std::string("num_dims=") + std::to_string(dim_count) + " ";
-    std::for_each(dim_values, dim_values + dim_count, [&dim_str](int64_t v) { dim_str += std::to_string(v) + ", "; });
-    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT,
-                                 (std::string("dim_values must be -1 (symbolic dimension) or larger. Got:") +
-                                  dim_str)
-                                     .c_str());
-
-    // return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "dim_values must be -1 (symbolic dimension) or larger.");
+    return OrtApis::CreateStatus(ORT_INVALID_ARGUMENT, "dim_values must be -1 (symbolic dimension) or larger.");
   }
 
   auto num_dims = std::max(dim_count, info->dim_params.size());
