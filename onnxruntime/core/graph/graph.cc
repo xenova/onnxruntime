@@ -3637,16 +3637,6 @@ Status Graph::InjectExternalInitializersFromFilesInMemory(
   return Status::OK();
 }
 
-bool Graph::GetOrtValueInitializer(const std::string& name, OrtValue& value) const {
-  auto it = ortvalue_initializers_.find(name);
-  if (it == ortvalue_initializers_.end()) {
-    return false;
-  }
-
-  value = it->second;
-  return true;
-}
-
 #endif  // DISABLE_EXTERNAL_INITIALIZERS
 #endif  // !defined(ORT_MINIMAL_BUILD)
 
@@ -3657,6 +3647,16 @@ bool Graph::GetInitializedTensor(const std::string& tensor_name, const TensorPro
     return false;
   }
   value = iter->second;
+  return true;
+}
+
+bool Graph::GetOrtValueInitializer(const std::string& name, OrtValue& value) const {
+  auto it = ortvalue_initializers_.find(name);
+  if (it == ortvalue_initializers_.end()) {
+    return false;
+  }
+
+  value = it->second;
   return true;
 }
 

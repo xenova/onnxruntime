@@ -468,10 +468,19 @@ TEST(ModelBuilderAPITest, InvalidDimension) {
                                             input_dims);
     // invalid dim of -2 should cause exception
     TypeInfo::CreateTensorInfo(tensor_type_info.GetConst());
-    FAIL();
+    FAIL() << "Expected exception for invalid dimension";
   } catch (const Ort::Exception& e) {
     ASSERT_STREQ(e.what(), "dim_values must be -1 (symbolic dimension) or larger.");
   }
+}
+
+TEST(ModelBuilderAPITest, TestSqueezenet) {
+  static constexpr PATH_TYPE MODEL_URI = TSTR("testdata/squeezenet/model.onnx");
+
+  SessionOptions so;
+  Ort::Session session(*ort_env, MODEL_URI, so);
+
+  auto in0 = session.GetInputTypeInfo(0);
 }
 
 /*

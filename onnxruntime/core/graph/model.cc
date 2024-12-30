@@ -740,7 +740,7 @@ Status Model::Load(int fd, const PathString& model_path, std::shared_ptr<Model>&
 }
 
 // static
-common::Status Model::LoadFromModelBuilderApiModel(const OrtModel& graph_api_model,
+common::Status Model::LoadFromModelBuilderApiModel(const OrtModel& model_builder_api_model,
                                                    const IOnnxRuntimeOpSchemaRegistryList* local_registries,
                                                    const ModelOptions& options,
                                                    const logging::Logger& logger,
@@ -758,9 +758,9 @@ common::Status Model::LoadFromModelBuilderApiModel(const OrtModel& graph_api_mod
     }
   }
 
-  ORT_RETURN_IF_ERROR(Graph::LoadFromModelBuilderApiModel(*graph_api_model.graph,
+  ORT_RETURN_IF_ERROR(Graph::LoadFromModelBuilderApiModel(*model_builder_api_model.graph,
                                                           *model,
-                                                          graph_api_model.domain_to_version,
+                                                          model_builder_api_model.domain_to_version,
                                                           schema_registry,
                                                           options.strict_shape_type_inference,
                                                           logger,

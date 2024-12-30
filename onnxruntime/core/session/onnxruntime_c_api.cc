@@ -2385,7 +2385,12 @@ ORT_API(const OrtTrainingApi*, OrtApis::GetTrainingApi, uint32_t version) {
 }
 
 ORT_API(const OrtModelBuilderApi*, OrtApis::GetModelBuilderApi) {
+#if !defined(ORT_MINIMAL_BUILD)
   return OrtModelBuilderAPI::GetModelBuilderApi();
+#else
+  fprintf(stderr, "The Model Builder API is not supported in a minimal build.\n");
+  return nullptr;
+#endif
 }
 
 static constexpr OrtApiBase ort_api_base = {
