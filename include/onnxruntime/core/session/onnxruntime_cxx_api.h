@@ -148,7 +148,15 @@ std::vector<std::string> GetAvailableProviders();
 /// This returns a reference to the ORT C Model Builder API. Used if building or augmenting a model at runtime.
 /// </summary>
 /// <returns>ORT C Model Builder API reference</returns>
-inline const OrtModelBuilderApi& GetModelBuilderApi() noexcept { return *GetApi().GetModelBuilderApi(); }
+inline const OrtModelBuilderApi& GetModelBuilderApi() {
+  auto* api = GetApi().GetModelBuilderApi();
+  if (api == nullptr) {
+    // minimal build
+    ORT_CXX_API_THROW("Model Builder API is not available in this build", ORT_FAIL);
+  }
+
+  return *api;
+}
 
 /** \brief IEEE 754 half-precision floating point data type
  *
@@ -533,14 +541,14 @@ ORT_DEFINE_RELEASE(KernelInfo);
 
 #undef ORT_DEFINE_RELEASE
 
-#define ORT_DEFINE_GRAPH_API_RELEASE(NAME) \
+#define ORT_DEFINE_MODELBUILDER_API_RELEASE(NAME) \
   inline void OrtRelease(Ort##NAME* ptr) { GetModelBuilderApi().Release##NAME(ptr); }
 
-ORT_DEFINE_GRAPH_API_RELEASE(ValueInfo);
-ORT_DEFINE_GRAPH_API_RELEASE(Node);
-ORT_DEFINE_GRAPH_API_RELEASE(Graph);
-ORT_DEFINE_GRAPH_API_RELEASE(Model);
-#undef ORT_DEFINE_GRAPH_API_RELEASE
+ORT_DEFINE_MODELBUILDER_API_RELEASE(ValueInfo);
+ORT_DEFINE_MODELBUILDER_API_RELEASE(Node);
+ORT_DEFINE_MODELBUILDER_API_RELEASE(Graph);
+ORT_DEFINE_MODELBUILDER_API_RELEASE(Model);
+#undef ORT_DEFINE_MODELBUILDER_API_RELEASE
 
 /** \brief This is a tagging template type. Use it with Base<T> to indicate that the C++ interface object
  *   has no ownership of the underlying C object.
@@ -1283,9 +1291,9 @@ struct TensorTypeAndShapeInfoImpl : Base<T> {
   [[deprecated("use GetShape()")]] void GetDimensions(int64_t* values, size_t values_count) const;  ///< Wraps OrtApi::GetDimensions
 
   void GetSymbolicDimensions(const char** values, size_t values_count) const;  ///< Wraps OrtApi::GetSymbolicDimensions
+  std::vector<const char*> GetSymbolicDimensions() const;
 
   std::vector<int64_t> GetShape() const;  ///< Uses GetDimensionsCount & GetDimensions to return a std::vector of the shape
-  std::vector<const char*> GetSymbolicDimensions() const;
 };
 
 }  // namespace detail
@@ -2544,7 +2552,7 @@ struct CustomOpBase : OrtCustomOp {
 };
 
 //
-// Graph API C++ wrappers
+// Model Builder API C++ wrappers
 //
 namespace ModelBuilderAPI {
 

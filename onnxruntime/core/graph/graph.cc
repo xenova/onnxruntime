@@ -3637,16 +3637,6 @@ Status Graph::InjectExternalInitializersFromFilesInMemory(
   return Status::OK();
 }
 
-bool Graph::GetOrtValueInitializer(const std::string& name, OrtValue& value) const {
-  auto it = ortvalue_initializers_.find(name);
-  if (it == ortvalue_initializers_.end()) {
-    return false;
-  }
-
-  value = it->second;
-  return true;
-}
-
 #endif  // DISABLE_EXTERNAL_INITIALIZERS
 #endif  // !defined(ORT_MINIMAL_BUILD)
 
@@ -3657,6 +3647,16 @@ bool Graph::GetInitializedTensor(const std::string& tensor_name, const TensorPro
     return false;
   }
   value = iter->second;
+  return true;
+}
+
+bool Graph::GetOrtValueInitializer(const std::string& name, OrtValue& value) const {
+  auto it = ortvalue_initializers_.find(name);
+  if (it == ortvalue_initializers_.end()) {
+    return false;
+  }
+
+  value = it->second;
   return true;
 }
 
@@ -5833,7 +5833,6 @@ Status Graph::LoadFromModelBuilderApiModel(const OrtGraph& api_graph, bool updat
       NodeProto node_proto;
 
       // 'Constant' node has no inputs or attributes
-      assert(node.input_names.empty() && node.attributes.empty());
       ORT_RETURN_IF_NOT(node.input_names.empty() && node.attributes.size() == 1 && node.output_names.size() == 1,
                         node.node_name,
                         " is an invalid 'Constant' node. "
