@@ -1547,7 +1547,7 @@ struct OrtApi {
    * \param[in] value Must be a tensor (not a map/sequence/etc) or will return failure
    * \param[out] out Newly created ::OrtTensorTypeAndShapeInfo. Must be freed with OrtApi::ReleaseTensorTypeAndShapeInfo
    *
-   * \snippet{doc} snippets.dox OrtStatus Return Value 
+   * \snippet{doc} snippets.dox OrtStatus Return Value
    */
   ORT_API2_STATUS(GetTensorTypeAndShape, _In_ const OrtValue* value, _Outptr_ OrtTensorTypeAndShapeInfo** out);
 
@@ -4751,7 +4751,7 @@ struct OrtApi {
    * \since Version 1.xx.
    */
   ORT_API2_STATUS(SessionOptionsAppendPluginExecutionProvider, _In_ OrtSessionOptions* options, _In_ const char* ep_name, _In_ OrtEnv* env,
-                   _In_reads_(num_keys) const char* const* provider_options_keys, _In_reads_(num_keys) const char* const* provider_options_values, _In_ size_t num_keys);
+                  _In_reads_(num_keys) const char* const* provider_options_keys, _In_reads_(num_keys) const char* const* provider_options_values, _In_ size_t num_keys);
 
   /** \brief Create OrtTypeConstraints object
    *
@@ -4821,13 +4821,7 @@ typedef enum OrtCustomOpInputOutputCharacteristic {
  */
 struct OrtCustomOp {
 #ifdef __cplusplus
-  OrtCustomOp() : CreateKernel{nullptr}, GetName{nullptr}, GetExecutionProviderType{nullptr}, GetInputType{nullptr},
-                  GetInputTypeCount{nullptr}, GetOutputType{nullptr}, GetOutputTypeCount{nullptr}, KernelCompute{nullptr},
-                  KernelDestroy{nullptr}, GetInputCharacteristic{nullptr}, GetOutputCharacteristic{nullptr},
-                  GetInputMemoryType{nullptr}, GetVariadicInputMinArity{nullptr}, GetVariadicInputHomogeneity{nullptr},
-                  GetVariadicOutputMinArity{nullptr}, GetVariadicOutputHomogeneity{nullptr}, CreateKernelV2{nullptr},
-                  KernelComputeV2{nullptr}, InferOutputShapeFn{nullptr}, GetStartVersion{nullptr}, GetEndVersion{nullptr},
-                  GetMayInplace{nullptr}, ReleaseMayInplace{nullptr}, GetAliasMap{nullptr}, ReleaseAliasMap{nullptr} {}
+  OrtCustomOp() : CreateKernel{nullptr}, GetName{nullptr}, GetExecutionProviderType{nullptr}, GetInputType{nullptr}, GetInputTypeCount{nullptr}, GetOutputType{nullptr}, GetOutputTypeCount{nullptr}, KernelCompute{nullptr}, KernelDestroy{nullptr}, GetInputCharacteristic{nullptr}, GetOutputCharacteristic{nullptr}, GetInputMemoryType{nullptr}, GetVariadicInputMinArity{nullptr}, GetVariadicInputHomogeneity{nullptr}, GetVariadicOutputMinArity{nullptr}, GetVariadicOutputHomogeneity{nullptr}, CreateKernelV2{nullptr}, KernelComputeV2{nullptr}, InferOutputShapeFn{nullptr}, GetStartVersion{nullptr}, GetEndVersion{nullptr}, GetMayInplace{nullptr}, ReleaseMayInplace{nullptr}, GetAliasMap{nullptr}, ReleaseAliasMap{nullptr} {}
 #endif
   uint32_t version;  // Must be initialized to ORT_API_VERSION
 

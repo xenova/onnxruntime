@@ -65,7 +65,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_GetAllInputs, const OrtGraphViewer* g
   const ::onnxruntime::GraphViewer* graph_viewer = reinterpret_cast<const ::onnxruntime::GraphViewer*>(graph);
   const auto& inputs = graph_viewer->GetInputsIncludingInitializers();
   *input_len = inputs.size();
-  *input_names = new const char*[*input_len];   // Should be released by the caller using OrtGraphApis::ReleaseCharArray
+  *input_names = new const char*[*input_len];  // Should be released by the caller using OrtGraphApis::ReleaseCharArray
   for (size_t i = 0; i < *input_len; i++) (*input_names)[i] = inputs[i]->Name().c_str();
   return nullptr;
 }
@@ -74,7 +74,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_GetAllInitializers, const OrtGraphVie
   const ::onnxruntime::GraphViewer* graph_viewer = reinterpret_cast<const ::onnxruntime::GraphViewer*>(graph);
   const auto& initializers = graph_viewer->GetAllInitializedTensors();
   *initializer_len = initializers.size();
-  *initializer_names = new const char*[*initializer_len];   // Should be released by the caller using OrtGraphApis::ReleaseCharArray
+  *initializer_names = new const char*[*initializer_len];  // Should be released by the caller using OrtGraphApis::ReleaseCharArray
   int i = 0;
   for (const auto& [key, value] : initializers) (*initializer_names)[i++] = key.c_str();
   return nullptr;
@@ -98,7 +98,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_GetNodesConsumingInput, const OrtGrap
   const ::onnxruntime::GraphViewer* graph_viewer = reinterpret_cast<const ::onnxruntime::GraphViewer*>(graph);
   std::vector<const ::onnxruntime::Node*> consumer_nodes = graph_viewer->GetConsumerNodes(input_name);
   *num_consumers = consumer_nodes.size();
-  *consumers = new const OrtNode* [*num_consumers];
+  *consumers = new const OrtNode*[*num_consumers];
   for (size_t i = 0; i < *num_consumers; i++) (*consumers)[i] = reinterpret_cast<const OrtNode*>(consumer_nodes[i]);
 
   return nullptr;
@@ -152,11 +152,11 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_GetInitializerTensor, const OrtGraphV
   const ::onnxruntime::GraphViewer* graph_viewer = reinterpret_cast<const ::onnxruntime::GraphViewer*>(graph);
   const onnx::TensorProto* initializer = nullptr;
   if (!graph_viewer->GetInitializedTensor(initializer_name, initializer)) {
-    return nullptr; // TODO(leca): not return nullptr for this case?
+    return nullptr;  // TODO(leca): not return nullptr for this case?
   }
   *out = new OrtTensorRef();  // TODO(leca): other datatypes in the following switch
   (*out)->shape_len = initializer->dims_size();
-  (*out)->shape = new int64_t [initializer->dims_size()];
+  (*out)->shape = new int64_t[initializer->dims_size()];
   for (size_t i = 0; i < (*out)->shape_len; i++) {
     ((*out)->shape)[i] = initializer->dims(static_cast<int>(i));
   }
@@ -198,7 +198,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_GetValueInfo, const OrtGraphViewer* g
   (*out)->data_type = GetDataTypeFromTypeProto(type);
   const auto& dims = utils::TryGetShape(*type)->dim();
   (*out)->shape_len = dims.size();
-  (*out)->shape = new int64_t [(*out)->shape_len];
+  (*out)->shape = new int64_t[(*out)->shape_len];
   for (size_t i = 0; i < (*out)->shape_len; i++) ((*out)->shape)[i] = utils::HasDimValue(dims[static_cast<int>(i)]) ? dims[static_cast<int>(i)].dim_value() : -1;
 
   return nullptr;
@@ -219,11 +219,11 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_SerializeToArray, const OrtGraphViewe
   const ::onnxruntime::GraphViewer* graph_viewer = reinterpret_cast<const ::onnxruntime::GraphViewer*>(graph);
   Model model(graph_viewer->Name(), true, ModelMetaData(), PathString(),
 #if defined(ORT_MINIMAL_BUILD)
-    IOnnxRuntimeOpSchemaRegistryList(),
+              IOnnxRuntimeOpSchemaRegistryList(),
 #else
-    IOnnxRuntimeOpSchemaRegistryList({graph_viewer->GetSchemaRegistry()}),
+              IOnnxRuntimeOpSchemaRegistryList({graph_viewer->GetSchemaRegistry()}),
 #endif
-    graph_viewer->DomainToVersionMap(), std::vector<onnx::FunctionProto>(), graph_viewer->GetGraph().GetLogger());
+              graph_viewer->DomainToVersionMap(), std::vector<onnx::FunctionProto>(), graph_viewer->GetGraph().GetLogger());
   onnx::ModelProto model_proto = model.ToProto();
   GraphViewerToProto(*graph_viewer, *model_proto.mutable_graph(), true, true, ExecutionOrder::PRIORITY_BASED);
   *data_size = model_proto.ByteSizeLong();
@@ -261,8 +261,8 @@ static std::string GetUniqueGraphName(const Graph& graph) {
 }
 
 static bool IsLocalValue(const Graph& graph,
-                                             const std::string& name,
-                                             const std::unordered_map<std::string, std::unique_ptr<SubGraphContext2>>& subgraph_context_map) {
+                         const std::string& name,
+                         const std::unordered_map<std::string, std::unique_ptr<SubGraphContext2>>& subgraph_context_map) {
   std::string unique_graph_name = GetUniqueGraphName(graph);
   if (subgraph_context_map.find(unique_graph_name) == subgraph_context_map.end()) {
     return false;
@@ -273,9 +273,9 @@ static bool IsLocalValue(const Graph& graph,
 }
 
 static bool IsInputInitializerOrOutput(const Graph& graph,
-                                                           const std::string& name,
-                                                           bool check_ancestors,
-                                                           const std::unordered_map<std::string, std::unique_ptr<SubGraphContext2>>& subgraph_context_map) {
+                                       const std::string& name,
+                                       bool check_ancestors,
+                                       const std::unordered_map<std::string, std::unique_ptr<SubGraphContext2>>& subgraph_context_map) {
   const Graph* parent_graph = nullptr;
   return IsLocalValue(graph, name, subgraph_context_map) ||
          (check_ancestors && (parent_graph = graph.ParentGraph()) != nullptr &&
@@ -283,8 +283,8 @@ static bool IsInputInitializerOrOutput(const Graph& graph,
 }
 
 static bool IsOuterScopeValue(const Graph& graph,
-                                                  const std::string& name,
-                                                  const std::unordered_map<std::string, std::unique_ptr<SubGraphContext2>>& subgraph_context_map) {
+                              const std::string& name,
+                              const std::unordered_map<std::string, std::unique_ptr<SubGraphContext2>>& subgraph_context_map) {
   const Graph* parent_graph = nullptr;
   return (parent_graph = graph.ParentGraph()) != nullptr &&
          IsInputInitializerOrOutput(*parent_graph, name, true, subgraph_context_map);
@@ -345,8 +345,8 @@ static void BuildSubGraphContext(const Graph& graph, std::unordered_map<std::str
 }
 
 static void SetGraphOuterScopeValuesAndInputs(Graph& graph_build,
-                                                                  const Graph& graph,
-                                                                  std::unordered_map<std::string, std::unique_ptr<SubGraphContext2>>& subgraph_context_map) {
+                                              const Graph& graph,
+                                              std::unordered_map<std::string, std::unique_ptr<SubGraphContext2>>& subgraph_context_map) {
   // Iterate all the nodes and recurse into inner most subgraph first for both newly built graph and original graph
   for (int i = 0; i < graph_build.MaxNodeIndex(); ++i) {
     auto graph_build_node = graph_build.GetNode(i);
@@ -395,18 +395,18 @@ static void SetGraphOuterScopeValuesAndInputs(Graph& graph_build,
 
     // Iterate all the implicit inputs to set outer scope value for the newly built subgraph
     for (const auto& input : graph.ParentNode()->ImplicitInputDefs()) {
-//      LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] \t" << input->Name();
+      //      LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] \t" << input->Name();
 
       // The node arg in parent node's implicit inputs could be used for parent node's other subgraph, for example
       // "If" op has two subgraphs. So we need to make sure that the node arg is used in current subgraph only.
       // (GetNodeArg searches for specific node arg in all node args in the graph)
       if (graph_build.GetNodeArg(input->Name())) {
         graph_build.AddOuterScopeNodeArg(input->Name());
-//        LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] \t" << input->Name() << " is used in this subgraph";
+        //        LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] \t" << input->Name() << " is used in this subgraph";
 
         if (context &&
             (context->manually_added_graph_inputs.find(input->Name()) != context->manually_added_graph_inputs.end())) {
-//          LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] \t" << input->Name() << " is already been added as an explicit input to graph";
+          //          LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] \t" << input->Name() << " is already been added as an explicit input to graph";
           continue;
         }
 
@@ -426,7 +426,7 @@ static void SetGraphOuterScopeValuesAndInputs(Graph& graph_build,
               type_proto->CopyFrom(*(input->TypeAsProto()));
               auto& n_input = top_level_graph->GetOrCreateNodeArg(name, type_proto.get());
               context->manually_added_graph_inputs[n_input.Name()] = &n_input;
-//              LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] \t" << n_input.Name() << " is added as an explicit input into the newly built graph";
+              //              LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] \t" << n_input.Name() << " is added as an explicit input into the newly built graph";
             }
           }
         }
@@ -489,13 +489,13 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_DumpOnnxModel,
   std::unique_ptr<ONNX_NAMESPACE::ModelProto> model_proto = std::make_unique<ONNX_NAMESPACE::ModelProto>(model->ToProto());
 
   // option 2
-  //auto model_proto = model->ToProto();
-  //graph->ToProto(*model_proto->mutable_graph(), true, true);
-  //model_proto->set_ir_version(ONNX_NAMESPACE::Version::IR_VERSION);
+  // auto model_proto = model->ToProto();
+  // graph->ToProto(*model_proto->mutable_graph(), true, true);
+  // model_proto->set_ir_version(ONNX_NAMESPACE::Version::IR_VERSION);
 
   std::fstream dump(onnx_model_path, std::ios::out | std::ios::trunc | std::ios::binary);
   model_proto->SerializeToOstream(&dump);
-  //LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] Dumped " + ctx_model_path;
+  // LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] Dumped " + ctx_model_path;
   return nullptr;
 }
 
@@ -515,7 +515,6 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_CreateOrUpdateEpCtxGraph,
                     const char* const* extra_attr_values,
                     size_t extra_attr_num,
                     _Outptr_ OrtGraph** ep_context_graph) {
-
   const std::string EPCONTEXT_OP = "EPContext";
   const std::string MAIN_CONTEXT = "main_context";
   const std::string EMBED_MODE = "embed_mode";
@@ -523,7 +522,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_CreateOrUpdateEpCtxGraph,
   const std::string ONNX_MODEL_FILENAME = "onnx_model_filename";
   const std::string EPCONTEXT_OP_DOMAIN = "com.microsoft";
   const std::string EPCONTEXT_WARNING =
-    "It's suggested to set the ORT graph optimization level to 0 and  \
+      "It's suggested to set the ORT graph optimization level to 0 and  \
                                               make \"embed_mode\" to 0 (\"ep_cache_context\" is the cache path)\
                                               for the best model loading time";
 
@@ -539,7 +538,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_CreateOrUpdateEpCtxGraph,
 
   // Create a new graph or use the existing one
   if (*ep_context_graph == nullptr) {
-    Model* model_build = new Model (graph_viewer->Name(), true, ModelMetaData(), PathString(),
+    Model* model_build = new Model(graph_viewer->Name(), true, ModelMetaData(), PathString(),
 #if !defined(ORT_MINIMAL_BUILD)
                                    IOnnxRuntimeOpSchemaRegistryList({graph_viewer->GetSchemaRegistry()}), graph_viewer->DomainToVersionMap(),
 #else
@@ -550,7 +549,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_CreateOrUpdateEpCtxGraph,
     *ep_context_graph = reinterpret_cast<OrtGraph*>(graph_build);
   } else {
     graph_build = reinterpret_cast<::onnxruntime::Graph*>(*ep_context_graph);
-  } 
+  }
 
   // Get graph inputs and outputs
   std::vector<onnxruntime::NodeArg*> inputs, outputs;
@@ -581,7 +580,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_CreateOrUpdateEpCtxGraph,
   bool node_existed = node_idx != std::numeric_limits<size_t>::max() ? true : false;
 
   // Create or get EP context node attributes
-  auto new_node_attributes = NodeAttributes(); // using NodeAttributes = std::unordered_map<std::string, ONNX_NAMESPACE::AttributeProto>
+  auto new_node_attributes = NodeAttributes();  // using NodeAttributes = std::unordered_map<std::string, ONNX_NAMESPACE::AttributeProto>
   NodeAttributes* node_attributes;
   if (node_existed) {
     node_attributes = &graph_build->GetNode(node_idx)->GetMutableAttributes();
@@ -589,9 +588,9 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_CreateOrUpdateEpCtxGraph,
     new_node_attributes.reserve(3 + extra_attr_num);
     node_attributes = &new_node_attributes;
   }
-  std::unique_ptr<ONNX_NAMESPACE::AttributeProto> attr_0 = std::make_unique<ONNX_NAMESPACE::AttributeProto>(); // main_context
-  std::unique_ptr<ONNX_NAMESPACE::AttributeProto> attr_1 = std::make_unique<ONNX_NAMESPACE::AttributeProto>(); // embed_mode
-  std::unique_ptr<ONNX_NAMESPACE::AttributeProto> attr_2 = std::make_unique<ONNX_NAMESPACE::AttributeProto>(); // ep_cache_context
+  std::unique_ptr<ONNX_NAMESPACE::AttributeProto> attr_0 = std::make_unique<ONNX_NAMESPACE::AttributeProto>();  // main_context
+  std::unique_ptr<ONNX_NAMESPACE::AttributeProto> attr_1 = std::make_unique<ONNX_NAMESPACE::AttributeProto>();  // embed_mode
+  std::unique_ptr<ONNX_NAMESPACE::AttributeProto> attr_2 = std::make_unique<ONNX_NAMESPACE::AttributeProto>();  // ep_cache_context
 
   std::string cache_data_str = "";
   std::string cache_path_str = cache_path;
@@ -614,7 +613,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_CreateOrUpdateEpCtxGraph,
       cache_data_str.assign(cache_data, size);
     }
     attr_2->set_s(cache_data_str);
-    //LOGS_DEFAULT(WARNING) << EPCONTEXT_WARNING;
+    // LOGS_DEFAULT(WARNING) << EPCONTEXT_WARNING;
   } else {
     attr_2->set_s(cache_path_str);
   }
@@ -657,20 +656,20 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_GetSubGraph, const OrtGraphViewer* gr
   }
   // NOTE!!: cannot use unique_ptr here, otherwise when this function exits, sub_graph_viewer->graph_->graph_proto_, which is from model_build->model_proto_, will be nullptr.
   // Pay special attention when Graph object is releasing. We need to release model_build seperately then.
-  Model* model_build = new Model (graph_viewer->Name(), true, ModelMetaData(), PathString(),
+  Model* model_build = new Model(graph_viewer->Name(), true, ModelMetaData(), PathString(),
 #if !defined(ORT_MINIMAL_BUILD)
-                                   IOnnxRuntimeOpSchemaRegistryList({graph_viewer->GetSchemaRegistry()}), graph_viewer->DomainToVersionMap(),
+                                 IOnnxRuntimeOpSchemaRegistryList({graph_viewer->GetSchemaRegistry()}), graph_viewer->DomainToVersionMap(),
 #else
-                                   IOnnxRuntimeOpSchemaRegistryList(), graph_viewer->DomainToVersionMap(),
+                                 IOnnxRuntimeOpSchemaRegistryList(), graph_viewer->DomainToVersionMap(),
 #endif  // ORT_MINIMAL_BUILD
-                                   std::vector<ONNX_NAMESPACE::FunctionProto>(), graph_viewer->GetGraph().GetLogger());
+                                 std::vector<ONNX_NAMESPACE::FunctionProto>(), graph_viewer->GetGraph().GetLogger());
 
   auto& graph_build = model_build->MainGraph();
   bool has_control_flow_op = false;
 
   std::vector<std::string> subgraph_output_names;
   const std::vector<NodeIndex>& node_index = graph_viewer->GetNodesInTopologicalOrder(ExecutionOrder::PRIORITY_BASED);
-  for(int i = 0; i < node_num; i++) {
+  for (int i = 0; i < node_num; i++) {
     const auto& node = graph_viewer->GetNode(node_index[node_indices[i]]);
     std::vector<onnxruntime::NodeArg*> inputs, outputs;
     for (auto input : node->InputDefs()) {
@@ -736,10 +735,10 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_GetSubGraph, const OrtGraphViewer* gr
   // it needs to handle outer scope values before calling graph.Resolve().
   std::unordered_map<std::string, std::unique_ptr<SubGraphContext2>> subgraph_context_map;
   if (has_control_flow_op && graph_viewer->ParentNode()) {
-  //   LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] Handle outer scope values for the subgraph " << graph_build.Name();
-     BuildSubGraphContext(graph_build, subgraph_context_map);
-     SetGraphOuterScopeValuesAndInputs(graph_build, graph_viewer->GetGraph(), subgraph_context_map);
-     SetAllGraphInputs(graph_build, subgraph_context_map);
+    //   LOGS_DEFAULT(VERBOSE) << "[TensorRT EP] Handle outer scope values for the subgraph " << graph_build.Name();
+    BuildSubGraphContext(graph_build, subgraph_context_map);
+    SetGraphOuterScopeValuesAndInputs(graph_build, graph_viewer->GetGraph(), subgraph_context_map);
+    SetAllGraphInputs(graph_build, subgraph_context_map);
   }
 
   common::Status status = graph_build.Resolve();
@@ -888,7 +887,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtNode_GetIndex, const OrtNode* node, _Out_ s
 ORT_API_STATUS_IMPL(OrtGraphApis::OrtNode_GetAttributeNames, const OrtNode* node, _Out_ const char*** names, _Out_ size_t* num) {
   const ::onnxruntime::Node* n = reinterpret_cast<const ::onnxruntime::Node*>(node);
   *num = n->GetAttributes().size();
-  *names = new const char* [*num];
+  *names = new const char*[*num];
   int i = 0;
   for (const auto& [k, v] : n->GetAttributes()) {
     (*names)[i++] = k.c_str();
@@ -963,7 +962,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtNode_GetAttributeStr, const OrtNode* node, 
   return nullptr;
 }
 
-ORT_API_STATUS_IMPL(OrtGraphApis::OrtNode_GetAttributeStrWithSize, const OrtNode* node, const char* key,  _Outptr_ const char** out, _Outptr_ size_t* size) {
+ORT_API_STATUS_IMPL(OrtGraphApis::OrtNode_GetAttributeStrWithSize, const OrtNode* node, const char* key, _Outptr_ const char** out, _Outptr_ size_t* size) {
   const ::onnxruntime::Node* n = reinterpret_cast<const ::onnxruntime::Node*>(node);
   *size = n->GetAttributes().at(key).s().size();
   *out = n->GetAttributes().at(key).s().c_str();
@@ -986,7 +985,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtNode_GetSubgraphs, const OrtNode* node, _Ou
   const ::onnxruntime::Node* n = reinterpret_cast<const ::onnxruntime::Node*>(node);
   std::vector<gsl::not_null<const Graph*>> subg = n->GetSubgraphs();
   *num = subg.size();
-  *subgraphs = new const OrtGraphViewer* [*num];
+  *subgraphs = new const OrtGraphViewer*[*num];
   for (size_t i = 0; i < *num; i++) {
     const ::onnxruntime::GraphViewer* graph_viewer = new const ::onnxruntime::GraphViewer(*subg[i]);
     (*subgraphs)[i] = reinterpret_cast<const OrtGraphViewer*>(graph_viewer);

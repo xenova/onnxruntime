@@ -3,7 +3,7 @@
 
 // Do not include this file directly. Please include "onnxruntime_cxx_api_ep.h" instead.
 
-namespace Ort{
+namespace Ort {
 namespace PluginEP {
 
 static const OrtGraphApi* ort_graph_api = GetApi().GetGraphApi(ORT_API_VERSION);
@@ -214,14 +214,14 @@ inline std::pair<VoidPtr, size_t> GraphViewer::SerializeToArray() {
 }
 
 inline GraphPtr GraphViewer::CreateOrUpdateEpCtxGraph(const char* node_name,
-                                          const int64_t main_context,
-                                          const int64_t embed_mode,
-                                          const char* cache_path,
-                                          char* cache_data,
-                                          size_t size,
-                                          const char* const* extra_attr_keys,
-                                          const char* const* extra_attr_values,
-                                          size_t extra_attr_num) {
+                                                      const int64_t main_context,
+                                                      const int64_t embed_mode,
+                                                      const char* cache_path,
+                                                      char* cache_data,
+                                                      size_t size,
+                                                      const char* const* extra_attr_keys,
+                                                      const char* const* extra_attr_values,
+                                                      size_t extra_attr_num) {
   OrtGraph* graph = nullptr;
   ThrowOnError(ort_graph_api->OrtGraph_CreateOrUpdateEpCtxGraph(graph_,
                                                                 node_name,
@@ -229,7 +229,7 @@ inline GraphPtr GraphViewer::CreateOrUpdateEpCtxGraph(const char* node_name,
                                                                 embed_mode,
                                                                 cache_path,
                                                                 cache_data,
-                                                                size, 
+                                                                size,
                                                                 extra_attr_keys,
                                                                 extra_attr_values,
                                                                 extra_attr_num,
@@ -423,6 +423,5 @@ inline float Node::GetAttributeFloat(std::string attribute_name) {
   return attribute_float;
 }
 
-
-}  // namespace Ort
 }  // namespace PluginEP
+}  // namespace Ort
