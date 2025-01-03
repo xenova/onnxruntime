@@ -7,11 +7,11 @@ ORT_API_STATUS_IMPL(OrtGraph_GetName, const OrtGraphViewer* graph, _Outptr_ cons
 
 ORT_API_STATUS_IMPL(OrtGraph_IsConstantInitializer, const OrtGraphViewer* graph, const char* name, bool check_outer_scope, _Out_ bool* out);
 
-ORT_API_STATUS_IMPL(OrtGraph_GetNodesIndexInTopologicalOrder, const OrtGraphViewer* graph, int execution_order, _Out_ const size_t** nodes_index_in_topological_order, _Out_ size_t* num_nodes);
+ORT_API_STATUS_IMPL(OrtGraph_GetNodeIndexesInTopologicalOrder, const OrtGraphViewer* graph, int execution_order, _Out_ const size_t** nodes_index_in_topological_order, _Out_ size_t* num_nodes);
 
 ORT_API_STATUS_IMPL(OrtGraph_IsSubgraph, const OrtGraphViewer* graph, _Out_ bool* out);
 
-ORT_API_STATUS_IMPL(OrtGraph_GetParenNode, const OrtGraphViewer* graph, _Outptr_ const OrtNode** parent_node);
+ORT_API_STATUS_IMPL(OrtGraph_GetParentNode, const OrtGraphViewer* graph, _Outptr_ const OrtNode** parent_node);
 
 ORT_API_STATUS_IMPL(OrtGraph_GetModelPath, const OrtGraphViewer* graph, _Outptr_ const void** model_path);
 

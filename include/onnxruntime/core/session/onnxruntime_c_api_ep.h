@@ -4,6 +4,9 @@
 #pragma once
 #include "onnxruntime_c_api.h"
 
+///
+// Need to keep lines to 120 chars
+
 ORT_RUNTIME_CLASS(ExecutionProvider);
 ORT_RUNTIME_CLASS(ExecutionProviderFactory);
 ORT_RUNTIME_CLASS(Node);
@@ -64,19 +67,41 @@ typedef struct OrtValueInfoRef {
 } OrtValueInfoRef;
 
 typedef struct OrtExecutionProvider {
+  // could this be done in the C++ EP API header instead of adding C++ related ifdef's in the C API?
 #ifdef __cplusplus
   OrtExecutionProvider() : GetCapability{nullptr}, Compile{nullptr}, RegisterKernels{nullptr}, CanCopy{nullptr}, CopyTensor{nullptr}, CreatePreferredAllocators{nullptr}, type{nullptr}, create_stream{nullptr}, default_device{nullptr}, extra_param_for_create_state_func{nullptr}, extra_param_for_compute_func{nullptr} {}
 #endif
+  // it would be more consistent to return OrtStatus for anything that could potentially fail so the EP has a way to
+  // return error information.
   void(ORT_API_CALL* GetCapability)(const OrtExecutionProvider* this_, const OrtGraphViewer* graph, size_t* cnt, OrtIndexedSubGraph***);
   OrtStatusPtr(ORT_API_CALL* Compile)(OrtExecutionProvider* this_, const OrtGraphViewer** graph, const OrtNode** node, size_t cnt, OrtNodeComputeInfo* node_compute_info);
   void(ORT_API_CALL* RegisterKernels)(OrtKernelRegistry* kernel_registry);
+
+  // should we have an OrtDataTransfer struct instead of expanding the members of that here? it's going to be a bit
+  // strange if we add CopyTensorAsync later which will have to be at the end of this struct
   bool(ORT_API_CALL* CanCopy)(const OrtDevice* source, const OrtDevice* target);
   OrtStatusPtr(ORT_API_CALL* CopyTensor)(const void* src, OrtMemoryInfoDeviceType source_device_type, OrtMemoryType source_mem_type, void* dst, OrtMemoryInfoDeviceType target_device_type, size_t count, void* stream);
+
+  // would be more consistent to return OrtStatusPtr and take an int* to set the num allocators
   int(ORT_API_CALL* CreatePreferredAllocators)(OrtExecutionProvider* this_, OrtAllocator*** ort_allocators);
+
+  // Does this belong in the EP struct or the ORT API or to be purely internal?
+  // Naively I would have expected that the values returned by GetCapability can be cleaned up directly by ORT.
   void(ORT_API_CALL* ReleaseIndexedSubGraphs)(OrtIndexedSubGraph** indexed_sub_graphs, size_t num_sub_graph);
-  const char* type;
-  OrtCreateStream* create_stream;
+
+  // do we want to expose variables directly or should we split them out so they're always nicely grouped?
+  // e.g. OrtExecutionProviderProperties has the properties, and the first function in this struct is a getter for the
+  // properties. that way as we add more things in the future we're not mixing functions and properties in
+  // OrtExecutionProvider and making it harder to find things.
+  const char* type;  // name of this isn't overly clear
+
+  // is this sufficient? the IExecutionProvider has RegisterStreamHandlers vs. a single create fn,
+  // and that also has a infrastructure for wait handles.
+  OrtCreateStream* create_stream;  // create_stream_fn?
   const OrtDevice* default_device;
+
+  // does this assume the extra param is the same for all compiled nodes?
+  // that could be overly restrictive so not clear that we want it at this level.
   void* extra_param_for_create_state_func;
   void* extra_param_for_compute_func;
 } OrtExecutionProvider;
@@ -115,8 +140,10 @@ struct OrtGraphApi {
    * \param[out] num_nodes The number of nodes
    *
    */
-  ORT_API2_STATUS(OrtGraph_GetNodesIndexInTopologicalOrder, const OrtGraphViewer* graph, int execution_order, _Out_ const size_t** nodes_index_in_topological_order, _Out_ size_t* num_nodes);
+  ORT_API2_STATUS(OrtGraph_GetNodeIndexesInTopologicalOrder, const OrtGraphViewer* graph, int execution_order, _Out_ const size_t** nodes_index_in_topological_order, _Out_ size_t* num_nodes);
 
+  // In order to keep the API minimal is there a good way to implement this sort of helper outside of this struct as
+  // it's really a call to OrtGraph_GetParentNode and checking if the return value is nullptr.
   /** \brief Check if the graph is a subgraph
    *
    * \param[in] graph The graph to query
@@ -131,7 +158,7 @@ struct OrtGraphApi {
    * \param[out] parent_node The node containing this Graph if IsSubgraph is true. Returns nullptr otherwise.
    *
    */
-  ORT_API2_STATUS(OrtGraph_GetParenNode, const OrtGraphViewer* graph, _Outptr_ const OrtNode** parent_node);
+  ORT_API2_STATUS(OrtGraph_GetParentNode, const OrtGraphViewer* graph, _Outptr_ const OrtNode** parent_node);
 
   /** \brief Gets the path of the owning model if any
    *
@@ -139,6 +166,7 @@ struct OrtGraphApi {
    * \param[out] model_path The path of the owning model if any
    *
    */
+  // what is expected usage? should we be using ORT_TSTR instead?
   ORT_API2_STATUS(OrtGraph_GetModelPath, const OrtGraphViewer* graph, _Outptr_ const void** model_path);
 
   /** \brief Gets the Graph inputs with no matching initializers, in the same order as defined in the GraphProto.
@@ -175,6 +203,9 @@ struct OrtGraphApi {
   ORT_API2_STATUS(OrtGraph_GetAllInitializers, const OrtGraphViewer* graph, _Outptr_ const char*** initializer_names, _Out_ size_t* initializer_len);
 
   // TODO(leca): maybe OrtGraph_ReleaseCharArray?
+  // Would it make more sense to have an overall ExecutionProviderApi struct via which you get the OrtGraphApi,
+  // and general purpose helpers like this could live there?
+
   /** \brief Release the char array
    *
    *  NOTE!!: Invoke this function after the use of OrtGraph_GetRequiredInputs, OrtGraph_GetAllInputs, OrtGraph_GetAllInitializers.
@@ -182,6 +213,7 @@ struct OrtGraphApi {
    * \param[in] char_array The char array to release
    *
    */
+  // would ReleaseCharPtrArray be more accurate. do we need if we're populating it with pointers to existing memory?
   ORT_API2_STATUS(ReleaseCharArray, const char** char_array);
 
   /** \brief Get const Node given specific node index. May return nullptr if node as been freed.
@@ -191,6 +223,7 @@ struct OrtGraphApi {
    * \param[out] node The node
    *
    */
+  // could this be OrtGraph_GetNode? The second 'Ort' feels redundant and we don't use it in places like GetNodesConsumingInput
   ORT_API2_STATUS(OrtGraph_GetOrtNode, const OrtGraphViewer* graph, size_t node_index, _Outptr_ const OrtNode** node);
 
   /** \brief Get the consumer nodes of a node arg with the given name
@@ -205,6 +238,8 @@ struct OrtGraphApi {
    */
   ORT_API2_STATUS(OrtGraph_GetNodesConsumingInput, const OrtGraphViewer* graph, const char* input_name, _Outptr_ const OrtNode*** consumers, _Out_ size_t* num_consumers);  // TODO(leca): ValueConsumers::comprehensive ?
 
+  // can we have something similar to ORT_CLASS_RELEASE for consistency with the ORT C API?
+
   /** \brief Release the OrtNode arrays
    *
    *  NOTE!!: Invoke this function after the use of OrtGraph_GetNodesConsumingInput.
@@ -213,6 +248,7 @@ struct OrtGraphApi {
    * \param[in] num_nodes The number of OrtNode arrays
    *
    */
+  // inconsistent with ORT C API to return a Status from a release function
   ORT_API2_STATUS(ReleaseOrtNodeArray, const OrtNode** nodes);
 
   /** \brief Get the producer node of a node arg with the given name
@@ -239,6 +275,9 @@ struct OrtGraphApi {
    *
    */
   ORT_API2_STATUS(OrtGraph_MaxNodeIndex, const OrtGraphViewer* graph, _Out_ int* max_node_index);
+
+  // What's the reason for not allocating an array and returning all at once like we do for lots of other things
+  // e.g. GetNodesConsumingInput
 
   /** \brief Gets the number of outputs of the Graph.
    *
@@ -275,6 +314,7 @@ struct OrtGraphApi {
    * \param[out] out The initializer tensor
    *
    */
+  // Can we just call this GetInitializer?
   ORT_API2_STATUS(OrtGraph_GetInitializerTensor, const OrtGraphViewer* graph, const char* initializer_name, _Outptr_ OrtTensorRef**);
 
   /** \brief Release the initializer tensor.
@@ -354,14 +394,16 @@ struct OrtGraphApi {
                   const char* node_name,
                   const int64_t main_context,
                   const int64_t embed_mode,
-                  const char* cache_path,
-                  char* cache_data,
+                  const char* cache_path,  // does this need to be ORT_TSTR?
+                  char* cache_data,        // why non-const?
                   size_t size,
                   const char* const* extra_attr_keys,
                   const char* const* extra_attr_values,
-                  size_t extra_attr_num,
+                  size_t extra_attr_num,  // nit: extra_attr_count or num_extra_attrs is slightly clearer. extra_attr_num _could_ sound like an index number rather than a count.
                   _Outptr_ OrtGraph** ep_context_graph);
 
+  // The 'Get' doesn't quite match as it's creating a new Graph and copying initializers
+  // Maybe OrtGraph_CreateGraphFromSubgraph?
   /** \brief Construct a subgraph from the Graph with the given node indices.
    *
    * \param[in] graph The graph to query
@@ -385,6 +427,8 @@ struct OrtGraphApi {
    */
   ORT_API2_STATUS(OrtGraph_ReleaseGraph, const OrtGraph* graph);
 
+  // This feels a little complicated and that we should be able to internally handle whether release_model is required
+  // via an internal property in OrtGraphViewer
   /** \brief Release the graph viewer instance.
    *
    * NOTE!!: Invoke this function after the use of OrtGraph_GetSubGraph. As OrtGraph_GetSubGraph allocates model instead of
@@ -452,6 +496,7 @@ struct OrtGraphApi {
    */
   ORT_API2_STATUS(OrtNode_GetExecutionProviderType, const OrtNode* node, _Out_ const char** out);
 
+  // GetOperatorType
   /** \brief Gets the Node's operator type.
    *
    * \param[in] node The node to query
@@ -551,10 +596,13 @@ struct OrtGraphApi {
    *
    * \param[in] node The node to query
    * \param[in] key The attribute key
-   * \param[out] out 1 if the attribute key exists in the node, 0 otherwise
+   * \param[out] out 1 if the attribute key exists in the node, 0 otherwise    Why not take a bool* instead?
    *
    */
   ORT_API2_STATUS(OrtNode_GetAttributeKeyCount, const OrtNode* node, const char* key, _Out_ size_t* out);
+
+  // what's the use-case for getting the attribute values one by one vs. using int** and size_t* to return them
+  // all at once?
 
   /** \brief Gets how many ints are in the attribute with the given key.
    *
@@ -670,6 +718,7 @@ struct OrtGraphApi {
    */
   ORT_API2_STATUS(OrtNode_GetSubgraphs, const OrtNode* node, _Outptr_ const OrtGraphViewer*** subgraphs, _Out_ size_t* num_subgraphs);
 
+  // Why can't the user do this directly if we tell them it was allocated with `malloc`?
   /** \brief Free the memory
    *
    * \param[in] p The memory to free

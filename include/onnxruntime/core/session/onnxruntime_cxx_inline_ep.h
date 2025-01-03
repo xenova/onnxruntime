@@ -66,10 +66,10 @@ inline bool GraphViewer::IsConstantInitializer(const char* name, bool check_oute
   return is_initializer;
 }
 
-inline const std::vector<size_t> GraphViewer::GetNodesIndexInTopologicalOrder(int execution_order) {
+inline const std::vector<size_t> GraphViewer::GetNodeIndexesInTopologicalOrder(int execution_order) {
   const size_t* nodes_index = nullptr;
   size_t nodes_count = 0;
-  ThrowOnError(ort_graph_api->OrtGraph_GetNodesIndexInTopologicalOrder(graph_, execution_order, &nodes_index, &nodes_count));
+  ThrowOnError(ort_graph_api->OrtGraph_GetNodeIndexesInTopologicalOrder(graph_, execution_order, &nodes_index, &nodes_count));
   return std::vector<size_t>(nodes_index, nodes_index + nodes_count);
 }
 
@@ -79,9 +79,9 @@ inline bool GraphViewer::IsSubgraph() {
   return is_subgraph;
 }
 
-inline std::shared_ptr<PluginEP::Node> GraphViewer::GetParenNode() {
+inline std::shared_ptr<PluginEP::Node> GraphViewer::GetParentNode() {
   const OrtNode* parent_node = nullptr;
-  ThrowOnError(ort_graph_api->OrtGraph_GetParenNode(graph_, &parent_node));
+  ThrowOnError(ort_graph_api->OrtGraph_GetParentNode(graph_, &parent_node));
   return std::make_shared<PluginEP::Node>(parent_node);
 }
 

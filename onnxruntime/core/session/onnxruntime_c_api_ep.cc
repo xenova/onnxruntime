@@ -40,7 +40,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_IsSubgraph, const OrtGraphViewer* gra
   return nullptr;
 }
 
-ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_GetParenNode, const OrtGraphViewer* graph, _Outptr_ const OrtNode** parent_node) {
+ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_GetParentNode, const OrtGraphViewer* graph, _Outptr_ const OrtNode** parent_node) {
   const ::onnxruntime::GraphViewer* graph_viewer = reinterpret_cast<const ::onnxruntime::GraphViewer*>(graph);
   *parent_node = reinterpret_cast<const OrtNode*>(graph_viewer->ParentNode());
   return nullptr;
@@ -500,7 +500,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_DumpOnnxModel,
 }
 
 /* Construct an "EP Context" graph if the given ep_context_graph graph is empty, otherwise:
- *   1. if the given node name can't be found in the graph, add an new "EP Context" node to the existing graph
+ *   1. if the given node name can't be found in the graph, add a new "EP Context" node to the existing graph
  *   2. if the node is already existed, update the node attributes only
  */
 ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_CreateOrUpdateEpCtxGraph,
@@ -509,8 +509,8 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_CreateOrUpdateEpCtxGraph,
                     const int64_t main_context,
                     const int64_t embed_mode,
                     const char* cache_path,
-                    char* cache_data,
-                    size_t size,
+                    char* cache_data,  // why not const?
+                    size_t size,       // cache_data_size would be clearer
                     const char* const* extra_attr_keys,
                     const char* const* extra_attr_values,
                     size_t extra_attr_num,
@@ -540,7 +540,8 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_CreateOrUpdateEpCtxGraph,
   if (*ep_context_graph == nullptr) {
     Model* model_build = new Model(graph_viewer->Name(), true, ModelMetaData(), PathString(),
 #if !defined(ORT_MINIMAL_BUILD)
-                                   IOnnxRuntimeOpSchemaRegistryList({graph_viewer->GetSchemaRegistry()}), graph_viewer->DomainToVersionMap(),
+                                   IOnnxRuntimeOpSchemaRegistryList({graph_viewer->GetSchemaRegistry()}),
+                                   graph_viewer->DomainToVersionMap(),
 #else
                                    IOnnxRuntimeOpSchemaRegistryList(), graph_viewer->DomainToVersionMap(),
 #endif  // ORT_MINIMAL_BUILD
@@ -576,7 +577,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_CreateOrUpdateEpCtxGraph,
     // return impossible value to indicate the node is not existed
     return std::numeric_limits<size_t>::max();
   };
-  size_t node_idx = get_node_index(graph_build, node_name);
+  size_t node_idx = get_node_index(graph_build, node_name);  // why call this if there was no existing ep_context_graph?
   bool node_existed = node_idx != std::numeric_limits<size_t>::max() ? true : false;
 
   // Create or get EP context node attributes
@@ -588,9 +589,16 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_CreateOrUpdateEpCtxGraph,
     new_node_attributes.reserve(3 + extra_attr_num);
     node_attributes = &new_node_attributes;
   }
-  std::unique_ptr<ONNX_NAMESPACE::AttributeProto> attr_0 = std::make_unique<ONNX_NAMESPACE::AttributeProto>();  // main_context
-  std::unique_ptr<ONNX_NAMESPACE::AttributeProto> attr_1 = std::make_unique<ONNX_NAMESPACE::AttributeProto>();  // embed_mode
-  std::unique_ptr<ONNX_NAMESPACE::AttributeProto> attr_2 = std::make_unique<ONNX_NAMESPACE::AttributeProto>();  // ep_cache_context
+
+  // why allocate here and copy vs something more direct like this?
+  // auto& att = (*node_attributes)[MAIN_CONTEXT];
+  // att.set_name(MAIN_CONTEXT);
+  // att.set_type(onnx::AttributeProto_AttributeType_INT);
+  // att.set_i(main_context);
+
+  auto attr_0 = std::make_unique<ONNX_NAMESPACE::AttributeProto>();  // main_context
+  auto attr_1 = std::make_unique<ONNX_NAMESPACE::AttributeProto>();  // embed_mode
+  auto attr_2 = std::make_unique<ONNX_NAMESPACE::AttributeProto>();  // ep_cache_context
 
   std::string cache_data_str = "";
   std::string cache_path_str = cache_path;
@@ -995,7 +1003,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtNode_GetSubgraphs, const OrtNode* node, _Ou
 
 ORT_API_STATUS_IMPL(OrtGraphApis::OrtFreeMem, void* p) {
   if (p) {
-    free(p);
+    free(p);  // given ORT is implemente
   }
   return nullptr;
 }
@@ -1003,9 +1011,9 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtFreeMem, void* p) {
 static constexpr OrtGraphApi ort_graph_api = {
     &OrtGraphApis::OrtGraph_GetName,
     &OrtGraphApis::OrtGraph_IsConstantInitializer,
-    &OrtGraphApis::OrtGraph_GetNodesIndexInTopologicalOrder,
+    &OrtGraphApis::OrtGraph_GetNodeIndexesInTopologicalOrder,
     &OrtGraphApis::OrtGraph_IsSubgraph,
-    &OrtGraphApis::OrtGraph_GetParenNode,
+    &OrtGraphApis::OrtGraph_GetParentNode,
     &OrtGraphApis::OrtGraph_GetModelPath,
     &OrtGraphApis::OrtGraph_GetRequiredInputs,
     &OrtGraphApis::OrtGraph_GetAllInputs,
