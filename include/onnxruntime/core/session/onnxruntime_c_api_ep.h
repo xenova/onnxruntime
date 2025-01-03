@@ -77,7 +77,7 @@ typedef struct OrtExecutionProvider {
   void(ORT_API_CALL* ReleaseIndexedSubGraphs)(OrtIndexedSubGraph** indexed_sub_graphs, size_t num_sub_graph);
   const char* type;
   OrtCreateStream* create_stream;
-  const OrtDevice* default_device;
+  const OrtDevice* default_device; 
   void* extra_param_for_create_state_func;
   void* extra_param_for_compute_func;
 } OrtExecutionProvider;

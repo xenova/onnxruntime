@@ -136,4 +136,4 @@ ORT_API_STATUS_IMPL(OrtNode_GetSubgraphs, const OrtNode* node, _Outptr_ const Or
 
 ORT_API_STATUS_IMPL(OrtFreeMem, void* p);
 
-}
+}  // namespace OrtGraphApis

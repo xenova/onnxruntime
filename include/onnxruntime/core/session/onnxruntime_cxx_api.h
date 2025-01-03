@@ -1170,7 +1170,7 @@ struct TensorTypeAndShapeInfoImpl : Base<T> {
 
   size_t GetDimensionsCount() const;  ///< Wraps OrtApi::GetDimensionsCount
 
-  /** \deprecated use GetShape() returning std::vector
+  /** \deprecated use GetShape() returning std::vector 
    * [[deprecated]]
    * This interface is unsafe to use
    */

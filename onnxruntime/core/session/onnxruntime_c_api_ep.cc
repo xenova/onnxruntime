@@ -550,7 +550,7 @@ ORT_API_STATUS_IMPL(OrtGraphApis::OrtGraph_CreateOrUpdateEpCtxGraph,
     *ep_context_graph = reinterpret_cast<OrtGraph*>(graph_build);
   } else {
     graph_build = reinterpret_cast<::onnxruntime::Graph*>(*ep_context_graph);
-  }
+  } 
 
   // Get graph inputs and outputs
   std::vector<onnxruntime::NodeArg*> inputs, outputs;

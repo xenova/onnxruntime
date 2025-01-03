@@ -1547,7 +1547,7 @@ struct OrtApi {
    * \param[in] value Must be a tensor (not a map/sequence/etc) or will return failure
    * \param[out] out Newly created ::OrtTensorTypeAndShapeInfo. Must be freed with OrtApi::ReleaseTensorTypeAndShapeInfo
    *
-   * \snippet{doc} snippets.dox OrtStatus Return Value
+   * \snippet{doc} snippets.dox OrtStatus Return Value 
    */
   ORT_API2_STATUS(GetTensorTypeAndShape, _In_ const OrtValue* value, _Outptr_ OrtTensorTypeAndShapeInfo** out);
 
