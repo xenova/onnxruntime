@@ -60,6 +60,14 @@ typedef struct OrtTensorRef {  // TODO(leca): OrtValueInfoRef inside OrtTensorRe
   size_t data_len;
 } OrtTensorRef;
 
+// We may want to use an opaque type to represent ValueInfo and there are a few difference usages.
+// 1) Model Builder API for model inputs/outputs. Has Name + OrtTypeInfo
+// 2) EP API where it's an onnxruntime::NodeArg
+// 3) Potential augmentation to add quantization info
+//
+// The first 2 both involve a name as well as type/shape info. I assume non-tensor types also need to be supported.
+// If it's an opaque type internally it could support both use cases.
+// e.g. the struct would have either Name+OrtTypeInfo or NodeArg set, and functions would get/set from one or the other.
 typedef struct OrtValueInfoRef {
   int64_t* shape;
   size_t shape_len;
