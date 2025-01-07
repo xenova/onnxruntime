@@ -7,21 +7,23 @@
 #include <fstream>
 #include <iostream>
 #include <numeric>
-#include <stack>
 #include <queue>
+#include <stack>
+
+#include <gsl/gsl>
 
 #include "core/common/common.h"
-#include <gsl/gsl>
 #include "core/common/inlined_containers.h"
 #include "core/common/logging/logging.h"
 #include "core/common/narrow.h"
 #include "core/flatbuffers/flatbuffers_utils.h"
-#include "core/framework/tensor_type_and_shape.h"
 #include "core/flatbuffers/schema/ort.fbs.h"
-#include "core/framework/tensor_shape.h"
 #include "core/framework/tensor_external_data_info.h"
+#include "core/framework/tensor_shape.h"
+#include "core/framework/tensor_type_and_shape.h"
 #include "core/framework/tensorprotoutils.h"
 #include "core/framework/utils.h"
+#include "core/graph/function_utils.h"
 #include "core/graph/graph_flatbuffers_utils.h"
 #include "core/graph/graph_viewer.h"
 #include "core/graph/indexed_sub_graph.h"
@@ -32,7 +34,6 @@
 #include "core/graph/node_attr_utils.h"
 #include "core/graph/op.h"
 #include "core/graph/runtime_optimization_record_container.h"
-#include "core/graph/function_utils.h"
 
 #if !defined(ORT_MINIMAL_BUILD)
 #include "core/graph/function.h"
@@ -1292,10 +1293,12 @@ Graph::Graph(const Model& owning_model,
 
     // Remove sparse_initializers from protobuf to save memory as they are converted to dense now
     graph_proto_->mutable_sparse_initializer()->Clear();
+#if GOOGLE_PROTOBUF_VERSION < 5026000
     const int sparse_num_cleared = graph_proto_->sparse_initializer().ClearedCount();
     for (int i = 0; i < sparse_num_cleared; ++i) {
       delete graph_proto_->mutable_sparse_initializer()->ReleaseCleared();
     }
+#endif
   }
 #endif
 
@@ -3665,15 +3668,16 @@ void Graph::CleanAllInitializedTensors() noexcept {
 #if !defined(DISABLE_SPARSE_TENSORS)
   sparse_tensor_names_.clear();
 #endif
-
   // Clearing RepeatedPtrFields does not free objects' memory. The memory is retained
   // and can be reused. Need to explicitly release the cleared objects and free the
   // memory.
   graph_proto_->mutable_initializer()->Clear();
+#if GOOGLE_PROTOBUF_VERSION < 5026000
   const int num_cleared = graph_proto_->initializer().ClearedCount();
   for (int i = 0; i < num_cleared; i++) {
     delete graph_proto_->mutable_initializer()->ReleaseCleared();
   }
+#endif
 
   ortvalue_initializers_.clear();
 }
