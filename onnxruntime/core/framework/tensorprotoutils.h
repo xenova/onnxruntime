@@ -514,6 +514,10 @@ inline bool HasName(const ONNX_NAMESPACE::NodeProto& node_proto) {
 }
 #endif
 
+// Check if the TensorProto has an external data entry that points to memory rather than an external file.
+// The external data location will be kTensorProtoMemoryAddressTag in this case.
+bool HasExternallyAllocatedMemory(const ONNX_NAMESPACE::TensorProto& tensor_proto);
+
 // UnpackTensor from raw data or the type specific data field. Does not handle external data.
 // If the tensor does not contain raw data then raw_data should be nullptr and raw_data_len should be 0.
 template <typename T>

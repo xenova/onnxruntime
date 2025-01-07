@@ -266,6 +266,18 @@ Status GetExternalDataInfo(const ONNX_NAMESPACE::TensorProto& tensor_proto,
   return Status::OK();
 }
 
+bool HasExternallyAllocatedMemory(const ONNX_NAMESPACE::TensorProto& tensor_proto) {
+  bool has_external_memory = false;
+  if (utils::HasExternalData(tensor_proto)) {
+    std::unique_ptr<onnxruntime::ExternalDataInfo> external_data_info;
+    ORT_THROW_IF_ERROR(onnxruntime::ExternalDataInfo::Create(tensor_proto.external_data(), external_data_info));
+
+    has_external_memory = external_data_info->GetRelPath() == onnxruntime::utils::kTensorProtoMemoryAddressTag;
+  }
+
+  return has_external_memory;
+}
+
 void SetRawDataInTensorProto(ONNX_NAMESPACE::TensorProto& tensor_proto, std::string&& param) {
   tensor_proto.set_raw_data(std::move(param));
 }

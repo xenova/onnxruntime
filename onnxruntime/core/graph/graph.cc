@@ -4093,30 +4093,59 @@ ONNX_NAMESPACE::GraphProto Graph::ToGraphProto() const {
   // This is used for constructing full path for external data
   // if it exists
 
+  auto add_initializer = [](TensorList& output_initializers, const TensorProto& initializer) -> Status {
+    TensorProto& output = *output_initializers.Add();
+    output = initializer;
+
+    // inline any in-memory external data
+    if (utils::HasExternalData(initializer)) {
+      const std::filesystem::path ignored;
+      std::basic_string<ORTCHAR_T> location;
+      onnxruntime::FileOffsetType file_offset;
+      SafeInt<size_t> tensor_byte_size;
+
+      ORT_RETURN_IF_ERROR(utils::GetExternalDataInfo(initializer, ignored, location, file_offset, tensor_byte_size));
+
+      if (location == onnxruntime::utils::kTensorProtoMemoryAddressTag) {
+        // file_offset is address
+        void* data = reinterpret_cast<void*>(file_offset);
+
+        // set in raw data
+        output.clear_data_location();
+        output.set_raw_data(data, tensor_byte_size);
+      }
+    }
+
+    return Status::OK();
+  };
+
+  auto* mutable_initializers = result.mutable_initializer();
+
 #if !defined(DISABLE_SPARSE_TENSORS)
   const auto& model_path = ModelPath();
   // We want to make sure that sparse initializers do not appear
   // as dense duplicates within the initializers list.
   if (!sparse_tensor_names_.empty()) {
     const auto sparse_end = sparse_tensor_names_.end();
-    auto* mutable_initializer = result.mutable_initializer();
     for (const auto& initializer : graph_proto_->initializer()) {
       if (sparse_end == sparse_tensor_names_.find(initializer.name())) {
-        *mutable_initializer->Add() = initializer;
+        add_initializer(*mutable_initializers, initializer);
       } else {
         auto& sparse_initializer = *result.add_sparse_initializer();
         auto status = utils::DenseTensorToSparseTensorProto(initializer, model_path, sparse_initializer);
         ORT_ENFORCE(status.IsOK(), "Failed to convert dense initializer to sparse");
       }
     }
-  } else {
-    *result.mutable_initializer() = graph_proto_->initializer();
-  }
+  } else
 #else
-  *result.mutable_initializer() = graph_proto_->initializer();
+  {
+    for (const auto& initializer : graph_proto_->initializer()) {
+      add_initializer(*mutable_initializers, initializer);
+    }
+  }
 #endif
 
-  return result;
+    return result;
 }
 
 Status Graph::AddExternalInitializersToGraphProtoImpl(
