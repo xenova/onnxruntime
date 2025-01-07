@@ -5177,7 +5177,7 @@ struct OrtModelBuilderApi {
    *          For smaller tensors use CreateTensorAsOrtValue.
    *
    *          ONNX shape inferencing does not support external data. An initializer involved in shape inferencing is
-   *          small (typically a single value or limited by the rank of a tensor) and uses less than 128 bytes of
+   *          typically small (a single value or limited by the rank of a tensor) and uses less than 128 bytes of
    *          memory, so this limit acts as a simple catch-all rule to avoid issues.
    *          e.g. Reshape's `shape`, Clip's `min` and `max`, various ops `axes`.
    *
