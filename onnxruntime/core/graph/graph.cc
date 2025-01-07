@@ -4097,7 +4097,7 @@ ONNX_NAMESPACE::GraphProto Graph::ToGraphProto() const {
   // This is used for constructing full path for external data
   // if it exists
 
-  auto add_initializer = [](TensorList& output_initializers, const TensorProto& initializer) -> Status {
+  auto add_initializer = [](TensorList& output_initializers, const TensorProto& initializer) -> void {
     TensorProto& output = *output_initializers.Add();
     output = initializer;
 
@@ -4108,7 +4108,7 @@ ONNX_NAMESPACE::GraphProto Graph::ToGraphProto() const {
       onnxruntime::FileOffsetType file_offset;
       SafeInt<size_t> tensor_byte_size;
 
-      ORT_RETURN_IF_ERROR(utils::GetExternalDataInfo(initializer, ignored, location, file_offset, tensor_byte_size));
+      ORT_THROW_IF_ERROR(utils::GetExternalDataInfo(initializer, ignored, location, file_offset, tensor_byte_size));
 
       if (location == onnxruntime::utils::kTensorProtoMemoryAddressTag) {
         // file_offset is address
@@ -4119,8 +4119,6 @@ ONNX_NAMESPACE::GraphProto Graph::ToGraphProto() const {
         output.set_raw_data(data, tensor_byte_size);
       }
     }
-
-    return Status::OK();
   };
 
   auto* mutable_initializers = result.mutable_initializer();
@@ -4129,27 +4127,24 @@ ONNX_NAMESPACE::GraphProto Graph::ToGraphProto() const {
   const auto& model_path = ModelPath();
   // We want to make sure that sparse initializers do not appear
   // as dense duplicates within the initializers list.
-  if (!sparse_tensor_names_.empty()) {
-    const auto sparse_end = sparse_tensor_names_.end();
-    for (const auto& initializer : graph_proto_->initializer()) {
-      if (sparse_end == sparse_tensor_names_.find(initializer.name())) {
-        add_initializer(*mutable_initializers, initializer);
-      } else {
-        auto& sparse_initializer = *result.add_sparse_initializer();
-        auto status = utils::DenseTensorToSparseTensorProto(initializer, model_path, sparse_initializer);
-        ORT_ENFORCE(status.IsOK(), "Failed to convert dense initializer to sparse");
-      }
-    }
-  } else
-#else
-  {
-    for (const auto& initializer : graph_proto_->initializer()) {
+  const bool has_sparse_initializers = !sparse_tensor_names_.empty();
+  const auto sparse_end = sparse_tensor_names_.end();
+  for (const auto& initializer : graph_proto_->initializer()) {
+    if (!has_sparse_initializers || sparse_end == sparse_tensor_names_.find(initializer.name())) {
       add_initializer(*mutable_initializers, initializer);
+    } else {
+      auto& sparse_initializer = *result.add_sparse_initializer();
+      auto status = utils::DenseTensorToSparseTensorProto(initializer, model_path, sparse_initializer);
+      ORT_ENFORCE(status.IsOK(), "Failed to convert dense initializer to sparse");
     }
+  }
+#else
+  for (const auto& initializer : graph_proto_->initializer()) {
+    add_initializer(*mutable_initializers, initializer);
   }
 #endif
 
-    return result;
+  return result;
 }
 
 Status Graph::AddExternalInitializersToGraphProtoImpl(
