@@ -33,7 +33,7 @@ Ort::Session CreateSession(Ort::Env& env,
                                                                   : default_session_options;
 
   // Set this to save the model if you want to debug.
-  session_options.SetOptimizedModelFilePath(ORT_TSTR("model_builder_output.onnx"));
+  // session_options.SetOptimizedModelFilePath(ORT_TSTR("model_builder_output.onnx"));
 
   Ort::Session session(env, graph_api_model, session_options);
 
@@ -141,7 +141,7 @@ TEST(ModelBuilderAPITest, Basic_CApi) {
     Ort::ThrowOnError(model_builder_api.CreateGraph(&graph));
 
     //
-    // Create OrtModel with a Gemm. X input is 3x2, Y input is 2x8, Z output is 3x8.
+    // Create OrtModel with a Gemm. X input is 3x4, Y input is 4x8, Z output is 3x8.
     // X is model input. Y is initializer.
     // Set the alpha attribute of the Gemm node to 2.0 to test attribute handling.
     //
@@ -280,7 +280,7 @@ TEST(ModelBuilderAPITest, Basic_CApi) {
 
     std::vector<float> expected_output;
     if (use_constant_node) {
-      // clipped with max 160
+      // clipped with min 400 and max 900
       expected_output = {400.0f, 400.0f, 400.0f, 400.0f, 420.0f, 440.0f, 460.0f, 480.0f,
                          596.0f, 648.0f, 700.0f, 752.0f, 804.0f, 856.0f, 900.0f, 900.0f,
                          592.0f, 640.0f, 688.0f, 736.0f, 784.0f, 832.0f, 880.0f, 900.0f};
@@ -308,7 +308,7 @@ TEST(ModelBuilderAPITest, Basic_CxxApi) {
   Ort::ModelBuilderAPI::Graph graph;
 
   //
-  // Create OrtModel with a Gemm. X input is 3x2, Y input is 2x3, Z output is 3x3.
+  // Create OrtModel with a Gemm. X input is 3x4, Y input is 4x8, Z output is 3x8.
   // X is model input. Y is initializer.
   // Set the alpha attribute of the Gemm node to 2.0 to test attribute handling.
   //
@@ -316,7 +316,7 @@ TEST(ModelBuilderAPITest, Basic_CxxApi) {
   std::vector<ModelBuilderAPI::ValueInfo> graph_inputs;
   std::vector<ModelBuilderAPI::ValueInfo> graph_outputs;
 
-  // model input. it's {3, 2} but use a symbolic dim to test that works.
+  // model input. it's {3, 4} but use a symbolic dim to test that works.
   std::vector<int64_t> input_dims({-1, 4});
   std::vector<std::string> input_symbolic_dims({"multiple_of_3", ""});
   TensorTypeAndShapeInfo input_tensor_info(ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,

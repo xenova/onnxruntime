@@ -17,6 +17,7 @@
 #include "core/common/logging/logging.h"
 #include "core/common/narrow.h"
 #include "core/flatbuffers/flatbuffers_utils.h"
+#include "core/framework/tensor_type_and_shape.h"
 #include "core/flatbuffers/schema/ort.fbs.h"
 #include "core/framework/tensor_external_data_info.h"
 #include "core/framework/tensor_shape.h"
@@ -4101,7 +4102,7 @@ ONNX_NAMESPACE::GraphProto Graph::ToGraphProto() const {
     TensorProto& output = *output_initializers.Add();
     output = initializer;
 
-    // inline any in-memory external data
+    // copy any in-memory external data into raw data
     if (utils::HasExternalData(initializer)) {
       const std::filesystem::path ignored;
       std::basic_string<ORTCHAR_T> location;
