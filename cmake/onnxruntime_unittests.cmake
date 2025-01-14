@@ -982,6 +982,9 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     set_target_properties(onnxruntime_test_all PROPERTIES LINK_DEPENDS ${ONNXRUNTIME_ROOT}/wasm/pre-jsep.js)
     set_property(TARGET onnxruntime_test_all APPEND_STRING PROPERTY LINK_FLAGS " --pre-js \"${ONNXRUNTIME_ROOT}/wasm/pre-jsep.js\"")
   endif()
+  if (onnxruntime_USE_WEBGPU)
+    set_property(TARGET onnxruntime_test_all APPEND_STRING PROPERTY LINK_FLAGS " -s ASYNCIFY_STACK_SIZE=131072")
+  endif()
 
   ###
   ### if you want to investigate or debug a test failure in onnxruntime_test_all, replace the following line.
