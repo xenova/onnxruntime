@@ -251,6 +251,3 @@ stages:
       displayName: Publish React Native Detox E2E test logs
 
     - template: explicitly-defined-final-tasks.yml
-
-
-
