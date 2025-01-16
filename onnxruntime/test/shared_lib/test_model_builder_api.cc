@@ -369,6 +369,8 @@ TEST(ModelBuilderAPITest, Basic_CxxApi) {
   ModelBuilderAPI::Model model(opsets);
   model.AddGraph(graph);
 
+  auto session = CreateSession(*ort_env, model);
+
   std::vector<Input<float>> inputs(1);
   auto& input = inputs[0];
   input.name = "X";
@@ -379,7 +381,6 @@ TEST(ModelBuilderAPITest, Basic_CxxApi) {
 
   std::vector<int64_t> expected_dims = {3, 8};
 
-  auto session = CreateSession(*ort_env, model);
   TestInference<float>(session, inputs, "Z", expected_dims,
                        {340.0f, 360.0f, 380.0f, 400.0f, 420.0f, 440.0f, 460.0f, 480.0f,
                         596.0f, 648.0f, 700.0f, 752.0f, 804.0f, 856.0f, 908.0f, 960.0f,
@@ -410,12 +411,15 @@ TEST(ModelBuilderAPITest, BasicModelEdit_CxxApi) {
   std::vector<ModelBuilderAPI::Model::DomainOpsetPair> opsets;  // no additional opsets required
   ModelBuilderAPI::Model model(opsets);
 
-  std::vector<std::string> input_names = session.GetInputNames();
-  ASSERT_EQ(input_names.size(), 1);
+  std::vector<ModelBuilderAPI::ValueInfo> graph_inputs = session.GetInputs();
+  ASSERT_EQ(graph_inputs.size(), 1);
+  ASSERT_EQ(graph_inputs[0].TypeInfo().GetTensorTypeAndShapeInfo().GetElementType(),
+            ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT);
 
-  TypeInfo orig_input = session.GetInputTypeInfo(0);
-  ASSERT_EQ(orig_input.GetTensorTypeAndShapeInfo().GetElementType(), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT);
-
+  // typically this isn't needed, but we want to replace this input and read info from it later on in the test
+  // validation so we move it out of the vector so it's saved locally.
+  auto orig_input_name = graph_inputs[0].Name();
+  auto input_shape = graph_inputs[0].TypeInfo().GetTensorTypeAndShapeInfo().GetShape();
   const std::string new_input_name = "Int64Input";
 
   // Add Cast node to convert input from float to int64
@@ -423,16 +427,16 @@ TEST(ModelBuilderAPITest, BasicModelEdit_CxxApi) {
   int64_t to = ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
   attributes.push_back(OpAttr("to", &to, 1, OrtOpAttrType::ORT_OP_ATTR_INT));
 
-  ModelBuilderAPI::Node node("Cast", onnxruntime::kOnnxDomain, new_input_name, {"Int64Input"}, {input_names[0]},
+  ModelBuilderAPI::Node node("Cast", onnxruntime::kOnnxDomain, new_input_name, {"Int64Input"},
+                             // the existing node will now consume the output from the Cast instead of a graph input
+                             {orig_input_name},
                              attributes);
 
-  // we're replacing the only input, so we don't need to call session.GetInputTypeInfo(x) to copy other inputs
-  // in order to preserve them
-  std::vector<ModelBuilderAPI::ValueInfo> graph_inputs;
+  // we're replacing the only input. the shape is the same but the name and data type change.
   TensorTypeAndShapeInfo input_tensor_info(ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64,
-                                           orig_input.GetTensorTypeAndShapeInfo().GetShape());
+                                           input_shape);
   auto input_type_info = TypeInfo::CreateTensorInfo(input_tensor_info.GetConst());
-  graph_inputs.emplace_back(new_input_name, input_type_info.GetConst());
+  graph_inputs[0] = ModelBuilderAPI::ValueInfo(new_input_name, input_type_info.GetConst());
 
   ModelBuilderAPI::Graph graph;  // new info to augment the model with
 
@@ -441,13 +445,12 @@ TEST(ModelBuilderAPITest, BasicModelEdit_CxxApi) {
 
   // the node we added does not require any new opsets.
   model.AddGraph(graph);
-
   session.FinalizeModelBuilderSession(model, so);
 
   std::vector<Input<int64_t>> inputs(1);
   auto& input = inputs[0];
   input.name = new_input_name.c_str();
-  input.dims = orig_input.GetTensorTypeAndShapeInfo().GetShape();
+  input.dims = input_shape;
 
   auto num_values = std::accumulate(input.dims.begin(), input.dims.end(), int64_t(1), std::multiplies<int64_t>());
   input.values.resize(size_t(num_values));
@@ -465,8 +468,8 @@ TEST(ModelBuilderAPITest, BasicModelEdit_CxxApi) {
     Session expected_session = Session(*ort_env, TSTR("testdata/mnist.onnx"), expected_so);
     std::vector<Input<float>> expected_inputs(1);
     auto& expected_input = expected_inputs[0];
-    expected_input.name = input_names[0].c_str();
-    expected_input.dims = orig_input.GetTensorTypeAndShapeInfo().GetShape();
+    expected_input.name = orig_input_name.c_str();
+    expected_input.dims = input_shape;
     expected_input.values.reserve(size_t(num_values));
     std::transform(input.values.begin(), input.values.end(), std::back_inserter(expected_input.values),
                    [&](int64_t value) { return float(value); });
@@ -489,10 +492,141 @@ TEST(ModelBuilderAPITest, InvalidDimension) {
   }
 }
 
-/*
-Tests required
+TEST(ModelBuilderAPITest, CreateInvalidModel_NoOpsets) {
+  Ort::ModelBuilderAPI::Graph graph;
+  std::vector<ModelBuilderAPI::ValueInfo> graph_inputs;
+  std::vector<ModelBuilderAPI::ValueInfo> graph_outputs;
 
-- Create invalid model. Graph::Resolve should fail.
-- Invalid edit. Graph::Resolve should fail.
-- All the non-tensor Create*TypeInfo functions need to be validated
-*/
+  std::vector<int64_t> dims({4});
+  TensorTypeAndShapeInfo tensor_info(ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, dims);
+  auto type_info = TypeInfo::CreateTensorInfo(tensor_info.GetConst());
+  graph_inputs.emplace_back("X", type_info.GetConst());
+  graph_outputs.emplace_back("Z", type_info.GetConst());
+
+  graph.SetInputs(graph_inputs);
+  graph.SetOutputs(graph_outputs);
+
+  ModelBuilderAPI::Node node("Add", onnxruntime::kOnnxDomain, "Add1", {"X", "X"}, {"Z"});
+
+  graph.AddNode(node);
+
+  std::vector<ModelBuilderAPI::Model::DomainOpsetPair> opsets;
+  ModelBuilderAPI::Model model(opsets);
+  model.AddGraph(graph);
+
+  try {
+    auto session = CreateSession(*ort_env, model);
+    FAIL();
+  } catch (const Ort::Exception& e) {
+    ASSERT_THAT(e.what(), ::testing::HasSubstr("Error No opset import for domain"));
+  }
+}
+
+TEST(ModelBuilderAPITest, CreateInvalidModel_MissingValue) {
+  Ort::ModelBuilderAPI::Graph graph;
+
+  std::vector<ModelBuilderAPI::ValueInfo> graph_inputs;
+  std::vector<ModelBuilderAPI::ValueInfo> graph_outputs;
+
+  std::vector<int64_t> dims({4});
+  TensorTypeAndShapeInfo tensor_info(ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, dims);
+  auto type_info = TypeInfo::CreateTensorInfo(tensor_info.GetConst());
+  graph_inputs.emplace_back("X", type_info.GetConst());
+  graph_outputs.emplace_back("Z", type_info.GetConst());
+
+  graph.SetInputs(graph_inputs);
+  graph.SetOutputs(graph_outputs);
+
+  ModelBuilderAPI::Node node("Add", onnxruntime::kOnnxDomain, "Add1", {"X", "missing"}, {"Z"});
+  graph.AddNode(node);
+
+  std::vector<ModelBuilderAPI::Model::DomainOpsetPair> opsets{{onnxruntime::kOnnxDomain, 18}};
+  ModelBuilderAPI::Model model(opsets);
+  model.AddGraph(graph);
+
+  try {
+    auto session = CreateSession(*ort_env, model);
+    FAIL();
+  } catch (const Ort::Exception& e) {
+    ASSERT_THAT(e.what(), ::testing::HasSubstr("Node input 'missing' is not a graph input, "
+                                               "initializer, or output of a previous node."));
+  }
+}
+
+TEST(ModelBuilderAPITest, InvalidModelEdit) {
+  // Add a node but make the edit invalid in various ways
+  //   - add node but don't update graph inputs
+  //   - add node with invalid domain
+  const auto edit_model = [](bool invalid_domain) {
+    SessionOptions so;
+
+    // Set this to save the model if you want to debug.
+    // so.SetOptimizedModelFilePath(ORT_TSTR("model_builder_edited.onnx"));
+
+    Session session = Session::CreateModelBuilderSession(*ort_env, TSTR("testdata/mnist.onnx"), so);
+
+    ASSERT_EQ(session.GetOpset(""), 8);  // ONNX domain is empty string
+
+    std::vector<ModelBuilderAPI::Model::DomainOpsetPair> opsets;  // no additional opsets required
+    ModelBuilderAPI::Model model(opsets);
+    ModelBuilderAPI::Graph graph;  // new info to augment the model with
+
+    const char* domain = invalid_domain ? "invalid_domain" : onnxruntime::kOnnxDomain;
+
+    std::vector<ModelBuilderAPI::ValueInfo> graph_inputs = session.GetInputs();
+    ASSERT_EQ(graph_inputs.size(), 1);
+    ASSERT_EQ(graph_inputs[0].TypeInfo().GetTensorTypeAndShapeInfo().GetElementType(),
+              ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT);
+
+    const std::string new_input_name = "Int64Input";
+
+    // Add Cast node to convert input from float to int64
+    std::vector<OpAttr> attributes;
+    int64_t to = ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
+    attributes.push_back(OpAttr("to", &to, 1, OrtOpAttrType::ORT_OP_ATTR_INT));
+
+    ModelBuilderAPI::Node node("Cast", domain, "NewInputNode", {new_input_name},
+                               // the existing node will now consume the output from the Cast instead of a graph input
+                               {graph_inputs[0].Name()},
+                               attributes);
+    graph.AddNode(node);
+
+    if (invalid_domain) {
+      // we're replacing the only input. the shape is the same but the name and data type change.
+      TensorTypeAndShapeInfo input_tensor_info(ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64,
+                                               graph_inputs[0].TypeInfo().GetTensorTypeAndShapeInfo().GetShape());
+      auto input_type_info = TypeInfo::CreateTensorInfo(input_tensor_info.GetConst());
+      graph_inputs[0] = ModelBuilderAPI::ValueInfo(new_input_name, input_type_info.GetConst());
+      graph.SetInputs(graph_inputs);
+    } else {
+      // model should be invalid as we didn't connect the new node up to the graph inputs
+    }
+
+    // the node we added does not require any new opsets.
+    model.AddGraph(graph);
+
+    try {
+      session.FinalizeModelBuilderSession(model, so);
+      FAIL() << "Should have failed to resolve graph due to invalid edits.";
+    } catch (const Ort::Exception& e) {
+      if (invalid_domain) {
+        ASSERT_THAT(e.what(), ::testing::HasSubstr("Error No opset import for domain 'invalid_domain'"));
+      } else {
+        ASSERT_THAT(e.what(), ::testing::HasSubstr("This is an invalid model"));
+      }
+    }
+  };
+
+  edit_model(false);
+  edit_model(true);  // add node with invalid domain
+}
+
+TEST(ModelBuilderAPITest, CreateTypeInfo) {
+  // sparse tensor
+
+  // sequence
+
+  // map
+
+  // optional
+}
