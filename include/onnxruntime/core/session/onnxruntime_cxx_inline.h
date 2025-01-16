@@ -1118,7 +1118,7 @@ std::vector<ModelBuilderAPI::ValueInfo> ConstSessionImpl<T>::GetInputs() const {
   std::vector<ModelBuilderAPI::ValueInfo> inputs;
   inputs.reserve(input_names.size());
 
-  for (int i = 0; i < input_names.size(); ++i) {
+  for (size_t i = 0; i < input_names.size(); ++i) {
     auto type_info = GetInputTypeInfo(i);
     inputs.emplace_back(ModelBuilderAPI::ValueInfo{input_names[i], type_info.GetConst()});
   }
@@ -1133,7 +1133,7 @@ std::vector<ModelBuilderAPI::ValueInfo> ConstSessionImpl<T>::GetOutputs() const 
   std::vector<ModelBuilderAPI::ValueInfo> outputs;
   outputs.reserve(output_names.size());
 
-  for (int i = 0; i < output_names.size(); ++i) {
+  for (size_t i = 0; i < output_names.size(); ++i) {
     auto type_info = GetOutputTypeInfo(i);
     outputs.emplace_back(ModelBuilderAPI::ValueInfo{output_names[i], type_info.GetConst()});
   }
