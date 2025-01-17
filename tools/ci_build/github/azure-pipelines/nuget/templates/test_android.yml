@@ -8,7 +8,8 @@ stages:
   condition: succeeded()
   jobs:
     - job:  NuGet_Test_Android
-      clean: all
+      workspace:
+        clean: all
       pool: "${{ parameters.AgentPool }}"
 
       steps:
