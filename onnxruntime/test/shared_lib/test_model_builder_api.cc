@@ -294,7 +294,7 @@ TEST(ModelBuilderAPITest, Basic_CApi) {
 
     api.ReleaseSession(session.release());
 
-    ASSERT_EQ(deleter.weights.size(), 0) << "All weights should have been freed";
+    ASSERT_EQ(deleter.weights.size(), size_t(0)) << "All weights should have been freed";
   };
 
   run_test(false);
