@@ -412,7 +412,7 @@ TEST(ModelBuilderAPITest, BasicModelEdit_CxxApi) {
   ModelBuilderAPI::Model model(opsets);
 
   std::vector<ModelBuilderAPI::ValueInfo> graph_inputs = session.GetInputs();
-  ASSERT_EQ(graph_inputs.size(), 1);
+  ASSERT_EQ(graph_inputs.size(), size_t(1));
   ASSERT_EQ(graph_inputs[0].TypeInfo().GetTensorTypeAndShapeInfo().GetElementType(),
             ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT);
 
@@ -574,7 +574,7 @@ TEST(ModelBuilderAPITest, InvalidModelEdit) {
     const char* domain = invalid_domain ? "invalid_domain" : onnxruntime::kOnnxDomain;
 
     std::vector<ModelBuilderAPI::ValueInfo> graph_inputs = session.GetInputs();
-    ASSERT_EQ(graph_inputs.size(), 1);
+    ASSERT_EQ(graph_inputs.size(), size_t(1));
     ASSERT_EQ(graph_inputs[0].TypeInfo().GetTensorTypeAndShapeInfo().GetElementType(),
               ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT);
 
