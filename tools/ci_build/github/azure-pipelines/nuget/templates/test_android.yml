@@ -1,5 +1,8 @@
 parameters:
   AgentPool : 'Win-CPU'
+  ArtifactSuffix: ''
+  SpecificArtifact: false
+  BuildId: ''
 
 stages:
 - stage: NuGet_Test_Android
@@ -7,10 +10,14 @@ stages:
   - NuGet_Packaging_CPU
   condition: succeeded()
   jobs:
-    - job:  NuGet_Test_Android
-      workspace:
-        clean: all
-      pool: "${{ parameters.AgentPool }}"
+  - job:  NuGet_Test_Android
+    workspace:
+      clean: all
+    pool: "${{ parameters.AgentPool }}"
+
+    variables:
+    - name: OnnxRuntimeBuildDirectory
+      value: '$(Build.BinariesDirectory)'
 
       steps:
         - task: NuGetToolInstaller@0
