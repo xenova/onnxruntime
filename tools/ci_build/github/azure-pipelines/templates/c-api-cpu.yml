@@ -810,6 +810,8 @@ stages:
     SpecificArtifact: ${{ parameters.SpecificArtifact }}
     BuildId: ${{ parameters.BuildId }}
 
+- template: ../nuget/templates/test_android.yml
+
 - template: ../nuget/templates/test_linux.yml
   parameters:
     AgentPool : onnxruntime-Ubuntu2204-AMD-CPU
