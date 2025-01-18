@@ -5282,14 +5282,14 @@ struct OrtModelBuilderApi {
 
   /** \brief Create an OrtSession to augment an existing model.
    *
-   * Create an OrtSession with an existing model that will be augmented with additional nodes.
+   * Create an OrtSession with an existing model that will be augmented with additional nodes and initializers.
    * Nodes can be added before or after the existing nodes in the model. ONNX Runtime will connect the nodes when the
    * model is finalized.
    *
-   * To add nodes to the existing model, first create an OrtModel using CreateModel.
-   * Add additional nodes and initializers to the OrtModel using AddNodeToGraph and AddInitializerToGraph.
-   * Graph inputs/outputs should be updated with SetGraphInputs and SetGraphOutputs to reflect changes made by the new
-   * nodes. The list of inputs/outputs should be for the overall model and not just the new nodes.
+   * To add nodes and initializers to the existing model, first create an OrtModel using CreateModel.
+   * Add nodes and initializers to the OrtModel using AddNodeToGraph and AddInitializerToGraph.
+   * Graph inputs/outputs should be updated with SetGraphInputs and SetGraphOutputs as needed to reflect changes made
+   * by the new nodes. The list of graph inputs/outputs should be for the overall model and not just the new nodes.
    *
    * Add the new information from the OrtModel to the original model using ApplyModelToSession, and prepare the
    * session for inferencing by calling FinalizeModelBuilderSession.
@@ -5304,14 +5304,14 @@ struct OrtModelBuilderApi {
 
   /** \brief Create an OrtSession to augment an existing model.
    *
-   * Create an OrtSession with an existing model that will be augmented with additional nodes.
+   * Create an OrtSession with an existing model that will be augmented with additional nodes and initializers.
    * Nodes can be added before or after the existing nodes in the model. ONNX Runtime will connect the nodes when the
    * model is finalized.
    *
-   * To add nodes to the existing model, first create an OrtModel using CreateModel.
-   * Add additional nodes and initializers to the OrtModel using AddNodeToGraph and AddInitializerToGraph.
-   * Graph inputs/outputs should be updated with SetGraphInputs and SetGraphOutputs to reflect changes made by the new
-   * nodes. The list of inputs/outputs should be for the overall model and not just the new nodes.
+   * To add nodes and initializers to the existing model, first create an OrtModel using CreateModel.
+   * Add nodes and initializers to the OrtModel using AddNodeToGraph and AddInitializerToGraph.
+   * Graph inputs/outputs should be updated with SetGraphInputs and SetGraphOutputs as needed to reflect changes made
+   * by the new nodes. The list of graph inputs/outputs should be for the overall model and not just the new nodes.
    *
    * Add the new information from the OrtModel to the original model using ApplyModelToSession, and prepare the
    * session for inferencing by calling FinalizeModelBuilderSession.

@@ -1122,8 +1122,8 @@ struct ConstSessionImpl : Base<T> {
 
   int GetOpset(const std::string& domain) const;  ///< Wraps OrtApi::SessionGetOpsetForDomain
 
-  // TODO: Should we move ValueInfo from ModelBuilderAPI to the ORT API? It will also be relevant to the Plugin EP API
-  // although the internal implementation may differ there.
+  // NOTE: We will probably move ValueInfo from ModelBuilderAPI to the ORT API as it will also be relevant to the Plugin EP API.
+  // Will move before checkin if that's the case.
   std::vector<ModelBuilderAPI::ValueInfo> GetInputs() const;
   std::vector<ModelBuilderAPI::ValueInfo> GetOutputs() const;
 };
