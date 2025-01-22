@@ -49,7 +49,7 @@ stages:
           targetType: 'inline'
           script: |
             dotnet nuget add source $(Build.SourcesDirectory)\nuget-artifact --name local-nuget
-            dotnet publish -c Release --property:UsePrebuiltNativePackage=true --property:CurrentOnnxRuntimeVersion=$(NuGetPackageVersionNumber)
+            dotnet publish -c Release --property:UsePrebuiltNativePackage=true --property:CurrentOnnxRuntimeVersion=$(NuGetPackageVersionNumber) -f net8.0-android
           workingDirectory: '$(Build.SourcesDirectory)\csharp\test\Microsoft.ML.OnnxRuntime.Tests.MAUI'
 
       - task: CopyFiles@2
