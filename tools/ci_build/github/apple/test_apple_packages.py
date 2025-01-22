@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 from c.assemble_c_pod_package import assemble_c_pod_package
 from package_assembly_utils import PackageVariant, gen_file_from_template, get_ort_version
@@ -18,6 +19,32 @@ from package_assembly_utils import PackageVariant, gen_file_from_template, get_o
 SCRIPT_PATH = pathlib.Path(__file__).resolve(strict=True)
 REPO_DIR = SCRIPT_PATH.parents[4]
 
+def is_simulator_booted(device_uuid):
+    try:
+        result = subprocess.run(
+            ["xcrun", "simctl", "list", "devices"],
+            capture_output=True,
+            text=True
+        )
+        output = result.stdout
+        if f"{device_uuid} (Booted)" in output:
+            return True
+        return False
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return False
+
+def wait_for_simulator(device_uuid, timeout=300, interval=5):
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if is_simulator_booted(device_uuid):
+            print("Simulator is booted.")
+            return True
+        else:
+            print("Waiting for simulator to boot...")
+            time.sleep(interval)
+    print("Timeout: Simulator did not boot within the specified time.")
+    return False
 
 def _test_apple_packages(args):
     # check if CocoaPods is installed
@@ -130,6 +157,9 @@ def _test_apple_packages(args):
             print(f"Simulator device info:\n{simulator_device_info}")
 
             simulator_device_info = json.loads(simulator_device_info)
+
+            device_uuid = simulator_device_info["device_udid"]
+            wait_for_simulator(device_uuid)
 
             # Xcode UI tests seem to be flaky: https://github.com/orgs/community/discussions/68807
             # Add a couple of retries if we get this error:
