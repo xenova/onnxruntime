@@ -44,6 +44,15 @@ stages:
           workingDirectory: '$(Build.SourcesDirectory)\csharp'
 
       - task: PowerShell@2
+        displayName: Generating MAUI keystore
+        inputs:
+          targetType: 'inline'
+          script: |
+            Write-Host "Generating debug.keystore"
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          workingDirectory: '$(Build.SourcesDirectory)\csharp'
+
+      - task: PowerShell@2
         displayName: Publish Android MAUI APK
         inputs:
           targetType: 'inline'
@@ -56,17 +65,33 @@ stages:
         inputs:
           targetType: 'inline'
           script: |
-            $folderPath = "$(Build.SourcesDirectory)\csharp\test"
-            $fileName = "*.apk"
-            Write-Host "Searching for $fileName in $folderPath"
-            $files = Get-ChildItem -Path $folderPath -Recurse -Filter $fileName
+            $folderPath = "$(Build.SourcesDirectory)"
+            $fileExtension = "*.apk"
+            Write-Host "Searching for files with extension $fileExtension in $folderPath"
+            $files = Get-ChildItem -Path $folderPath -Recurse -Filter $fileExtension
             if ($files) {
               Write-Host "Found files:"
               $files | ForEach-Object { Write-Host $_.FullName }
             } else {
               Write-Host "No files found."
             }
-        displayName: 'Search for file recursively'
+        displayName: 'Search for APK files recursively'
+
+      - task: PowerShell@2
+        inputs:
+          targetType: 'inline'
+          script: |
+            $folderPath = "$(Build.SourcesDirectory)"
+            $fileExtension = "*.aab"
+            Write-Host "Searching for files with extension $fileExtension in $folderPath"
+            $files = Get-ChildItem -Path $folderPath -Recurse -Filter $fileExtension
+            if ($files) {
+              Write-Host "Found files:"
+              $files | ForEach-Object { Write-Host $_.FullName }
+            } else {
+              Write-Host "No files found."
+            }
+        displayName: 'Search for AAB files recursively'
 
       - task: CopyFiles@2
         displayName: 'Copy apk to staging directory'
