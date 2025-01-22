@@ -33,7 +33,7 @@ stages:
 
       - template: get-nuget-package-version-as-variable.yml
         parameters:
-          packageFolder: '$(Build.BinariesDirectory)\nuget-artifact'
+          packageFolder: '$(Build.SourcesDirectory)\nuget-artifact'
 
       - task: PowerShell@2
         displayName: Install MAUI workloads
