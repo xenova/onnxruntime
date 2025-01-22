@@ -52,6 +52,22 @@ stages:
             dotnet publish -c Release --property:UsePrebuiltNativePackage=true --property:CurrentOnnxRuntimeVersion=$(NuGetPackageVersionNumber) -f net8.0-android
           workingDirectory: '$(Build.SourcesDirectory)\csharp\test\Microsoft.ML.OnnxRuntime.Tests.MAUI'
 
+      - task: PowerShell@2
+        inputs:
+          targetType: 'inline'
+          script: |
+            $folderPath = "$(Build.SourcesDirectory)\csharp\test"
+            $fileName = "*.apk"
+            Write-Host "Searching for $fileName in $folderPath"
+            $files = Get-ChildItem -Path $folderPath -Recurse -Filter $fileName
+            if ($files) {
+              Write-Host "Found files:"
+              $files | ForEach-Object { Write-Host $_.FullName }
+            } else {
+              Write-Host "No files found."
+            }
+        displayName: 'Search for file recursively'
+
       - task: CopyFiles@2
         displayName: 'Copy apk to staging directory'
         inputs:
