@@ -25,13 +25,14 @@ stages:
         inputs:
           versionSpec: 6.10.x
 
-      - template: ../../templates/flex-downloadPipelineArtifact.yml
-        parameters:
-          StepName: 'Download Pipeline Artifact'
-          ArtifactName: drop-signed-nuget-${{ parameters.ArtifactSuffix }}
-          TargetPath: '$(Build.BinariesDirectory)\nuget-artifact'
-          SpecificArtifact: ${{ parameters.SpecificArtifact }}
-          BuildId: ${{ parameters.BuildId }}
+      - task: PowerShell@2
+        displayName: Download NuGet package
+        inputs:
+          targetType: 'inline'
+          script: |
+            New-Item -Path $(Build.SourcesDirectory)\nuget-artifact -ItemType Directory
+            nuget install Microsoft.ML.OnnxRuntime -OutputDirectory nuget-artifact -Source https://api.nuget.org/v3/index.json
+          workingDirectory: '$(Build.SourcesDirectory)'
 
       - template: get-nuget-package-version-as-variable.yml
         parameters:
@@ -50,7 +51,7 @@ stages:
         inputs:
           targetType: 'inline'
           script: |
-            dotnet nuget add source $(Build.BinariesDirectory)\nuget-artifact --name local-nuget
+            dotnet nuget add source $(Build.SourcesDirectory)\nuget-artifact --name local-nuget
             dotnet publish -c Release --property:UsePrebuiltNativePackage=true --property:CurrentOnnxRuntimeVersion=$(NuGetPackageVersionNumber)
           workingDirectory: '$(Build.SourcesDirectory)\csharp\test\Microsoft.ML.OnnxRuntime.Tests.MAUI'
 
