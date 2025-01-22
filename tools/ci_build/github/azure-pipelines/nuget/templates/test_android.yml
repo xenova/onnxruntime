@@ -6,9 +6,6 @@ parameters:
 
 stages:
 - stage: NuGet_Test_Android
-  dependsOn:
-  - NuGet_Packaging_CPU
-  condition: succeeded()
   jobs:
   - job:  NuGet_Test_Android
     workspace:
