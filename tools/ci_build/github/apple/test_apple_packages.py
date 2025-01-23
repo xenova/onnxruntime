@@ -27,6 +27,7 @@ def is_simulator_booted(device_uuid):
             text=True
         )
         output = result.stdout
+        print("OUTPUT: /////// ", output)
         if f"{device_uuid} (Booted)" in output:
             return True
         return False
