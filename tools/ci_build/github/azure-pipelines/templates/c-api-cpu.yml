@@ -424,11 +424,11 @@ stages:
         versionSpec: 6.10.x
 
     - task: PowerShell@2
-      displayName: Install mobile workloads
+      displayName: Install mobile & MAUI workloads
       inputs:
         targetType: 'inline'
         script: |
-          dotnet workload install android ios maccatalyst
+          dotnet workload install android ios maccatalyst maui maui-ios maui-android maui-maccatalyst
         workingDirectory: '$(Build.SourcesDirectory)\csharp'
 
     - task: MSBuild@1

@@ -7,7 +7,7 @@
 
 	<!-- General app properties -->
 	<PropertyGroup>
-		<TargetFrameworks>net8.0;net8.0-android;net8.0-ios;net8.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks>net8.0-android;net8.0-ios;net8.0-maccatalyst</TargetFrameworks>
 		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net8.0-windows10.0.19041.0</TargetFrameworks>
 
 		<!-- Note for MacCatalyst:
@@ -25,7 +25,6 @@
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<!-- some of the helper packages don't have strong named assemblies. -->
 		<NoWarn>8002</NoWarn>
-		<OutputType Condition="'$(TargetFramework)' != 'net8.0'">Exe</OutputType>
 
 		<!-- These are copied from the sample. TBD what we really need. -->
 		<DefineConstants Condition="'$(CI)' != 'true'">$(DefineConstants);INCLUDE_FAILING_TESTS</DefineConstants>
