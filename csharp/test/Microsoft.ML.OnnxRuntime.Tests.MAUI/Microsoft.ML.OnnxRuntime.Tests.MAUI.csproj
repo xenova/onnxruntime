@@ -49,6 +49,7 @@
 
 		<SignAssembly>true</SignAssembly>
 		<AssemblyOriginatorKeyFile>..\..\OnnxRuntime.snk</AssemblyOriginatorKeyFile>
+		<PublishRelease>true</PublishRelease>
 	</PropertyGroup>
 
 	<ItemGroup>

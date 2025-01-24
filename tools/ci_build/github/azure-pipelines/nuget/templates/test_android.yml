@@ -44,6 +44,17 @@ stages:
           workingDirectory: '$(Build.SourcesDirectory)\csharp'
 
       - task: PowerShell@2
+        displayName: List installed workloads
+        inputs:
+          targetType: 'inline'
+          script: |
+            $output = dotnet --list-sdks
+            Write-Output $output
+            $output1 = dotnet workload list
+            Write-Output $output1
+          workingDirectory: '$(Build.SourcesDirectory)\csharp'
+
+      - task: PowerShell@2
         displayName: Generating MAUI keystore
         inputs:
           targetType: 'inline'
