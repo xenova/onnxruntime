@@ -2645,7 +2645,7 @@ def main():
 
     print(args)
 
-    if args.build_shared_lib and args.use_qnn != "static_lib" and (args.use_tensorrt or args.use_openvino or args.use_vitisai or args.use_qnn):
+    if args.build_shared_lib and (args.use_tensorrt or args.use_openvino or args.use_vitisai or (args.use_qnn and args.use_qnn != "static_lib")):
         args.enable_generic_interface = True
 
     if os.getenv("ORT_BUILD_WITH_CACHE") == "1":
