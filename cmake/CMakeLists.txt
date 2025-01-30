@@ -871,8 +871,8 @@ else()
 endif()
 
 if (onnxruntime_USE_CUDA)
-    list(APPEND ORT_PROVIDER_FLAGS -DUSE_CUDA=1) #used in onnxruntime as well EP specific targets... 
-    list(APPEND ONNXRUNTIME_PROVIDER_NAMES cuda) # used in onnxruntime.dll only for including global headers as well as symbols and dependency on targets
+    list(APPEND ORT_PROVIDER_FLAGS -DUSE_CUDA=1)
+    list(APPEND ONNXRUNTIME_PROVIDER_NAMES cuda)
 
     if (onnxruntime_USE_FLASH_ATTENTION)
       message( STATUS "Enable flash attention for CUDA EP")
@@ -903,7 +903,6 @@ if (onnxruntime_USE_VITISAI_INTERFACE AND (NOT onnxruntime_USE_VITISAI))
     list(APPEND ORT_EXTRA_INTERFACE_FLAGS -DUSE_VITISAI=1)
 endif()
 
-
 if (onnxruntime_USE_DNNL)
     list(APPEND ORT_PROVIDER_FLAGS -DUSE_DNNL=1)
     list(APPEND ONNXRUNTIME_PROVIDER_NAMES dnnl)
@@ -917,7 +916,6 @@ endif()
 if (onnxruntime_USE_OPENVINO_INTERFACE AND (NOT onnxruntime_USE_OPENVINO))
     list(APPEND ORT_EXTRA_INTERFACE_FLAGS -DUSE_OPENVINO=1)
 endif()
-
 
 if (onnxruntime_USE_TENSORRT)
     list(APPEND ORT_PROVIDER_FLAGS -DUSE_TENSORRT=1)
@@ -1431,7 +1429,7 @@ if (onnxruntime_ENABLE_TRAINING_APIS)
   )
 endif()
 
-if (onnxruntime_USE_OPENVINO)  #Fix this block since globally applied to everything
+if (onnxruntime_USE_OPENVINO)
 
   add_definitions(-DUSE_OPENVINO=1)
 
