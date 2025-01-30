@@ -919,7 +919,7 @@ if (onnxruntime_USE_OPENVINO_INTERFACE AND (NOT onnxruntime_USE_OPENVINO))
 endif()
 
 
-if (onnxruntime_USE_TENSORRT OR onnxruntime_USE_TENSORRT_INTERFACE)
+if (onnxruntime_USE_TENSORRT)
     list(APPEND ORT_PROVIDER_FLAGS -DUSE_TENSORRT=1)
     #TODO: remove the following line and change the test code in onnxruntime_shared_lib_test to use the new EP API.
     list(APPEND ONNXRUNTIME_PROVIDER_NAMES tensorrt)
@@ -1431,7 +1431,7 @@ if (onnxruntime_ENABLE_TRAINING_APIS)
   )
 endif()
 
-if (onnxruntime_USE_OPENVINO OR onnxruntime_USE_OPENVINO_INTERFACE)
+if (onnxruntime_USE_OPENVINO)  #Fix this block since globally applied to everything
 
   add_definitions(-DUSE_OPENVINO=1)
 
@@ -1444,7 +1444,7 @@ if (onnxruntime_USE_OPENVINO OR onnxruntime_USE_OPENVINO_INTERFACE)
     add_definitions(-DOPENVINO_CONFIG_GPU=1)
   endif()
 
-  if (onnxruntime_USE_OPENVINO_CPU OR onnxruntime_USE_OPENVINO_INTERFACE) # OpenVino CPU interface is default built.
+  if (onnxruntime_USE_OPENVINO_CPU)
     add_definitions(-DOPENVINO_CONFIG_CPU=1)
   endif()
 
