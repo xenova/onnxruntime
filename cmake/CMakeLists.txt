@@ -835,6 +835,7 @@ endif()
 set(ONNXRUNTIME_PROVIDER_NAMES cpu)
 
 set(ORT_PROVIDER_FLAGS)
+set(ORT_EXTRA_INTERFACE_FLAGS)
 
 if (onnxruntime_USE_CUDA)
   enable_language(CUDA)
@@ -869,9 +870,9 @@ else()
   set(onnxruntime_USE_MEMORY_EFFICIENT_ATTENTION OFF)
 endif()
 
-if (onnxruntime_USE_CUDA OR onnxruntime_USE_CUDA_INTERFACE)
-    list(APPEND ORT_PROVIDER_FLAGS -DUSE_CUDA=1)
-    list(APPEND ONNXRUNTIME_PROVIDER_NAMES cuda)
+if (onnxruntime_USE_CUDA)
+    list(APPEND ORT_PROVIDER_FLAGS -DUSE_CUDA=1) #used in onnxruntime as well EP specific targets... 
+    list(APPEND ONNXRUNTIME_PROVIDER_NAMES cuda) # used in onnxruntime.dll only for including global headers as well as symbols and dependency on targets
 
     if (onnxruntime_USE_FLASH_ATTENTION)
       message( STATUS "Enable flash attention for CUDA EP")
@@ -889,23 +890,45 @@ if (onnxruntime_USE_CUDA OR onnxruntime_USE_CUDA_INTERFACE)
     endif()
 endif()
 
-if (onnxruntime_USE_VITISAI OR onnxruntime_USE_VITISAI_INTERFACE)
+if (onnxruntime_USE_CUDA_INTERFACE AND (NOT onnxruntime_USE_CUDA))
+    list(APPEND ORT_EXTRA_INTERFACE_FLAGS -DUSE_CUDA=1)
+endif()
+
+if (onnxruntime_USE_VITISAI)
     list(APPEND ORT_PROVIDER_FLAGS -DUSE_VITISAI=1)
     list(APPEND ONNXRUNTIME_PROVIDER_NAMES vitisai)
 endif()
+
+if (onnxruntime_USE_VITISAI_INTERFACE AND (NOT onnxruntime_USE_VITISAI))
+    list(APPEND ORT_EXTRA_INTERFACE_FLAGS -DUSE_VITISAI=1)
+endif()
+
+
 if (onnxruntime_USE_DNNL)
     list(APPEND ORT_PROVIDER_FLAGS -DUSE_DNNL=1)
     list(APPEND ONNXRUNTIME_PROVIDER_NAMES dnnl)
 endif()
-if (onnxruntime_USE_OPENVINO OR onnxruntime_USE_OPENVINO_INTERFACE)
+
+if (onnxruntime_USE_OPENVINO)
     list(APPEND ORT_PROVIDER_FLAGS -DUSE_OPENVINO=1)
     list(APPEND ONNXRUNTIME_PROVIDER_NAMES openvino)
 endif()
+
+if (onnxruntime_USE_OPENVINO_INTERFACE AND (NOT onnxruntime_USE_OPENVINO))
+    list(APPEND ORT_EXTRA_INTERFACE_FLAGS -DUSE_OPENVINO=1)
+endif()
+
+
 if (onnxruntime_USE_TENSORRT OR onnxruntime_USE_TENSORRT_INTERFACE)
     list(APPEND ORT_PROVIDER_FLAGS -DUSE_TENSORRT=1)
     #TODO: remove the following line and change the test code in onnxruntime_shared_lib_test to use the new EP API.
     list(APPEND ONNXRUNTIME_PROVIDER_NAMES tensorrt)
 endif()
+
+if (onnxruntime_USE_TENSORRT_INTERFACE AND (NOT onnxruntime_USE_TENSORRT))
+    list(APPEND ORT_INTERFACE_FLAGS -DUSE_TENSORRT=1)
+endif()
+
 if (onnxruntime_USE_RKNPU)
     list(APPEND ORT_PROVIDER_FLAGS -DUSE_RKNPU=1)
     list(APPEND ONNXRUNTIME_PROVIDER_NAMES rknpu)
@@ -923,7 +946,13 @@ if (onnxruntime_USE_JSEP)
     list(APPEND ONNXRUNTIME_PROVIDER_NAMES js)
 endif()
 if (onnxruntime_USE_QNN OR onnxruntime_USE_QNN_INTERFACE)
-    list(APPEND ORT_PROVIDER_FLAGS -DUSE_QNN=1)
+    
+    if(onnxruntime_USE_QNN)
+        list(APPEND ORT_PROVIDER_FLAGS -DUSE_QNN=1)
+    else()
+        list(APPEND ORT_EXTRA_INTERFACE_FLAGS -DUSE_QNN=1) 
+    endif()
+
     list(APPEND ONNXRUNTIME_PROVIDER_NAMES qnn)
     if (NOT QNN_ARCH_ABI)
       string(TOLOWER ${onnxruntime_target_platform} GEN_PLATFORM)
@@ -1161,6 +1190,13 @@ function(onnxruntime_set_compile_flags target_name)
     foreach(ORT_FLAG ${ORT_PROVIDER_FLAGS})
       target_compile_definitions(${target_name} PRIVATE ${ORT_FLAG})
     endforeach()
+
+    if("${target_name}" STREQUAL "onnxruntime")
+        foreach(ORT_EXTRA_FLAG ${ORT_EXTRA_INTERFACE_FLAGS})
+          target_compile_definitions(${target_name} PRIVATE ${ORT_EXTRA_FLAG})
+        endforeach()
+    endif()
+
     if (HAS_DEPRECATED_COPY)
       #too many such errors in eigen
       target_compile_options(${target_name} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:SHELL:--compiler-options -Wno-deprecated-copy>" "$<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-copy>")
