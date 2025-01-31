@@ -222,6 +222,11 @@ onnxruntime_fetchcontent_makeavailable(Protobuf)
 if(Protobuf_FOUND)
   message(STATUS "Protobuf version: ${Protobuf_VERSION}")
 else()
+  if(protobuf_SOURCE_DIR)
+    if(onnxruntime_USE_WEBGPU)
+      set(DAWN_PROTOBUF_DIR ${protobuf_SOURCE_DIR})
+    endif()
+  endif()
   # Adjust warning flags
   if (TARGET libprotoc)
     if (NOT MSVC)
@@ -522,12 +527,7 @@ if(TARGET ONNX::onnx_proto AND NOT TARGET onnx_proto)
   add_library(onnx_proto ALIAS ONNX::onnx_proto)
 endif()
 
-find_package(Eigen3 CONFIG)
-if(Eigen3_FOUND)
-  get_target_property(eigen_INCLUDE_DIRS Eigen3::Eigen INTERFACE_INCLUDE_DIRECTORIES)
-else()
-  include(eigen) # FetchContent
-endif()
+include(external/eigen.cmake)
 
 if(onnxruntime_USE_VCPKG)
   find_package(wil CONFIG REQUIRED)
@@ -576,8 +576,8 @@ if (onnxruntime_RUN_ONNX_TESTS)
 endif()
 
 
-if(onnxruntime_ENABLE_ATEN)
-  message(STATUS "Aten fallback is enabled.")
+if(onnxruntime_ENABLE_DLPACK)
+  message(STATUS "dlpack is enabled.")
   FetchContent_Declare(
     dlpack
     URL ${DEP_URL_dlpack}
@@ -631,7 +631,7 @@ if (onnxruntime_USE_WEBGPU)
       URL_HASH SHA1=${DEP_SHA1_dawn}
       # All previous patches are merged into the upstream dawn project. We don't need to apply any patches right now.
       # if we need to apply patches in the future, we can uncomment the following line.
-      PATCH_COMMAND ${Patch_EXECUTABLE} --binary --ignore-whitespace -p1 < ${PROJECT_SOURCE_DIR}/patches/dawn/dawn.patch
+      # PATCH_COMMAND ${Patch_EXECUTABLE} --binary --ignore-whitespace -p1 < ${PROJECT_SOURCE_DIR}/patches/dawn/dawn.patch
     )
   endif()
 
