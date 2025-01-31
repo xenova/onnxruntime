@@ -5,17 +5,10 @@
 
   <Import Project="../Microsoft.ML.OnnxRuntime.Tests.Common/NativeLibraryInclude.props" />
 
-<<<<<<< HEAD
   <!-- General app properties -->
   <PropertyGroup>
     <TargetFrameworks>net8.0-android;net8.0-ios;net8.0-maccatalyst</TargetFrameworks>
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net8.0-windows10.0.19041.0</TargetFrameworks>
-=======
-    <!-- General app properties -->
-    <PropertyGroup>
-        <TargetFrameworks>net8.0;net8.0-android;net8.0-ios;net8.0-maccatalyst</TargetFrameworks>
-        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net8.0-windows10.0.19041.0</TargetFrameworks>
->>>>>>> eedad80fe9 (Working android MAUI app + project that runs android browserstack test)
 
     <!-- Note for MacCatalyst:
     The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
@@ -24,7 +17,6 @@
     either BOTH runtimes must be indicated or ONLY macatalyst-x64. -->
     <!-- For example: <RuntimeIdentifiers>maccatalyst-x64;maccatalyst-arm64</RuntimeIdentifiers> -->
 
-<<<<<<< HEAD
     <OutputType>Exe</OutputType>
     <RootNamespace>Microsoft.ML.OnnxRuntime.Tests.MAUI</RootNamespace>
     <UseMaui>true</UseMaui>
@@ -34,17 +26,6 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- some of the helper packages don't have strong named assemblies. -->
     <NoWarn>8002</NoWarn>
-=======
-        <OutputType Condition="'$(TargetFramework)' != 'net8.0'">Exe</OutputType>
-        <RootNamespace>Microsoft.ML.OnnxRuntime.Tests.MAUI</RootNamespace>
-        <UseMaui>true</UseMaui>
-        <SingleProject>true</SingleProject>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <!-- some of the helper packages don't have strong named assemblies. -->
-        <NoWarn>8002</NoWarn>
->>>>>>> eedad80fe9 (Working android MAUI app + project that runs android browserstack test)
 
     <!-- These are copied from the sample. TBD what we really need. -->
     <DefineConstants Condition="'$(CI)' != 'true'">$(DefineConstants);INCLUDE_FAILING_TESTS</DefineConstants>
@@ -144,44 +125,8 @@ Microsoft.ML.OnnxRuntime.Tests.Common project -->
     <DefaultLanguage>en</DefaultLanguage>
   </PropertyGroup>
 
-<<<<<<< HEAD
   <PropertyGroup Condition="'$(IsAndroidTarget)' == 'true'">
     <AndroidPackageFormat>apk</AndroidPackageFormat>
   </PropertyGroup>
 
-=======
-    <ItemGroup>
-        <PackageReference Include="DeviceRunners.VisualRunners.Maui" Version="0.1.0-preview.2" />
-        <PackageReference Include="DeviceRunners.VisualRunners.Xunit" Version="0.1.0-preview.2" />
-        <PackageReference Include="DeviceRunners.XHarness.Maui" Version="0.1.0-preview.2" />
-        <PackageReference Include="DeviceRunners.XHarness.Xunit" Version="0.1.0-preview.2" />
-		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
-        <PackageReference Include="Microsoft.DotNet.XHarness.TestRunners.Xunit" Version="9.0.0-prerelease.24374.1" />
-        <PackageReference Include="Microsoft.Maui.Controls" Version="8.0.70" />
-        <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="8.0.70" />
-        <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
-        <PackageReference Include="xunit" Version="2.9.0" />
-        <PackageReference Include="xunit.runner.utility" Version="2.9.0" />
-    </ItemGroup>
-
-    <ItemGroup Condition="$(IsIOSTarget)=='true' OR $(IsMacCatalystTarget)=='true'">
-        <!-- need the dummy ORT Extensions package to resolve the RegisterCustomOps symbol. -->
-        <PackageReference Include="Microsoft.ML.OnnxRuntime.Extensions.Dummy" Version="0.12.0" />
-    </ItemGroup>
-
-    <Target Name="RemoveVisualStudioTestRunner" BeforeTargets="_ComputeAppxPackagePayload">
-        <ItemGroup>
-            <_VisualStudioTestRunnerFiles
-                Include="@(PackagingOutputs)"
-                Condition="$([System.String]::Copy('%(PackagingOutputs.FullPath)').Contains('xunit.runner.visualstudio'))" />
-            <PackagingOutputs Remove="@(_VisualStudioTestRunnerFiles)" />
-        </ItemGroup>
-    </Target>
-
-	<PropertyGroup Condition="'$(IsAndroidTarget)' !='true'">
-		<GenerateProgramFile>false</GenerateProgramFile>
-		<DefaultLanguage>en</DefaultLanguage>
-	</PropertyGroup>
-
->>>>>>> eedad80fe9 (Working android MAUI app + project that runs android browserstack test)
 </Project>
