@@ -105,4 +105,4 @@ stages:
           workingDirectory: '$(Build.SourcesDirectory)\csharp\test\Microsoft.ML.OnnxRuntime.Tests.BrowserStack.Android'
         env:
           BROWSERSTACK_USERNAME: $(browserstack_username)
-          BROWSERSTACK_TOKEN: $(browserstack_access_key)
+          BROWSERSTACK_ACCESS_KEY: $(browserstack_access_key)
