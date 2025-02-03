@@ -44,26 +44,6 @@ stages:
           workingDirectory: '$(Build.SourcesDirectory)\csharp'
 
       - task: PowerShell@2
-        displayName: List installed workloads
-        inputs:
-          targetType: 'inline'
-          script: |
-            $output = dotnet --list-sdks
-            Write-Output $output
-            $output1 = dotnet workload list
-            Write-Output $output1
-          workingDirectory: '$(Build.SourcesDirectory)\csharp'
-
-      - task: PowerShell@2
-        displayName: Generating MAUI keystore
-        inputs:
-          targetType: 'inline'
-          script: |
-            Write-Host "Generating debug.keystore"
-            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          workingDirectory: '$(Build.SourcesDirectory)\csharp'
-
-      - task: PowerShell@2
         displayName: Publish Android MAUI APK
         inputs:
           targetType: 'inline'
@@ -92,22 +72,6 @@ stages:
         inputs:
           targetType: 'inline'
           script: |
-            $folderPath = "$(Build.SourcesDirectory)"
-            $fileExtension = "*.aab"
-            Write-Host "Searching for files with extension $fileExtension in $folderPath"
-            $files = Get-ChildItem -Path $folderPath -Recurse -Filter $fileExtension
-            if ($files) {
-              Write-Host "Found files:"
-              $files | ForEach-Object { Write-Host $_.FullName }
-            } else {
-              Write-Host "No files found."
-            }
-        displayName: 'Search for AAB files recursively'
-
-      - task: PowerShell@2
-        inputs:
-          targetType: 'inline'
-          script: |
             $folderPath = "$(Build.SourcesDirectory)\csharp\test\Microsoft.ML.OnnxRuntime.Tests.MAUI\bin\Release\net8.0-android\publish"
             Write-Host "Listing all files in $folderPath"
             $files = Get-ChildItem -Path $folderPath -Recurse | Where-Object { -not $_.PSIsContainer }
@@ -131,3 +95,14 @@ stages:
         inputs:
           artifactName: 'test signed apk'
           targetPath: '$(Build.ArtifactStagingDirectory)'
+
+      - task: PowerShell@2
+        displayName: Run BrowserStack test
+        inputs:
+          targetType: 'inline'
+          script: |
+            dotnet test
+          workingDirectory: '$(Build.SourcesDirectory)\csharp\test\Microsoft.ML.OnnxRuntime.Tests.BrowserStack.Android'
+        env:
+          BROWSERSTACK_USERNAME: $(browserstack_username)
+          BROWSERSTACK_TOKEN: $(browserstack_access_key)
