@@ -125,6 +125,8 @@ stages:
     pool:
       vmImage: 'macOS-13'
     timeoutInMinutes: 300
+    strategy:
+      parallel: 10
     steps:
     - template: set-version-number-variables-step.yml
 
