@@ -267,6 +267,37 @@ __global__ void InitializeBeamHypotheses(BeamHypotheses* beam_hyps, int beam_hyp
   beam_hyp.done_ = false;
 }
 
+// Function to dump the data in the struct
+__device__ void dump_hypothesis_score(const struct HypothesisScore* hs) {
+    printf("HypothesisScore Dump:\n");
+    printf("  hypothesis_length: %d\n", hs->hypothesis_length);
+    printf("  score: %f\n", hs->score);
+
+    printf("  hypothesis: ");
+    if (hs->hypothesis_length > 0 && hs->hypothesis != NULL) {
+        for (int i = 0; i < hs->hypothesis_length; ++i) {
+            printf("%d ", hs->hypothesis[i]);
+        }
+    } else {
+        printf("(empty)");
+    }
+    printf("\n");
+}
+
+__device__ void dump_beam_hypotheses(const struct BeamHypotheses* bh) {
+    printf("BeamHypotheses Dump:\n");
+    printf("  beams_count_: %d\n", bh->beams_count_);
+    printf("  beams_used_: %d\n", bh->beams_used_);
+    printf("  length_penalty_: %f\n", bh->length_penalty_);
+    printf("  done_: %s\n", bh->done_ ? "true" : "false");
+
+    printf("  beams_:\n");
+    for (int i = 0; i < bh->beams_used_; ++i) {
+        printf("    Beam %d:\n", i + 1);
+        dump_hypothesis_score(&bh->beams_[i]);
+    }
+}
+
 // For counts that are typically far less than 256, this will round up the count to the next multiple of 32
 // If this winds up being >256 then it uses a block size of 256 and calculates the appropriate grid_size
 struct GridBlock32 {
@@ -298,6 +329,8 @@ void LaunchInitializeBeamHypotheses(gsl::span<BeamHypotheses> beam_hyps,
 __device__ void BeamHypotheses::Add(const int32_t* hypothesis, int hypothesis_length, float sum_logprobs) {
   float score = sum_logprobs / pow(static_cast<float>(hypothesis_length), length_penalty_);
 
+  printf("\n >>> BeamHypotheses::Add (score=%f hypothesis_length=%d sum_logprobs=%f) \n", score, hypothesis_length, sum_logprobs);
+
   size_t index = beams_used_;
   // If the array is full, don't add unless it's better than the worst element
   if (index == beams_count_) {
@@ -311,11 +344,17 @@ __device__ void BeamHypotheses::Add(const int32_t* hypothesis, int hypothesis_le
     beams_[index] = beams_[index - 1];
 
   beams_[index] = HypothesisScore{hypothesis, hypothesis_length, score};
+
+  printf("\n >>> BeamHypotheses::Add (index=%d) \n", static_cast<int>(index));
+  dump_hypothesis_score(&beams_[index]);
 }
 
 __device__ bool BeamHypotheses::CanImprove(float best_sum_logprobs, int current_length) const {
   float current_score = best_sum_logprobs / pow(static_cast<float>(current_length), length_penalty_);
-  return beams_[beams_count_ - 1].score < current_score;
+  bool result = beams_[beams_count_ - 1].score < current_score;
+  printf("\n <<< BeamHypotheses::CanImprove (current_score=%f beams_[%d].score=%f can_improve=%d) \n",
+         current_score, beams_count_ - 1, beams_[beams_count_ - 1].score, static_cast<int>(result));
+  return result;
 }
 
 template <typename T>
@@ -358,11 +397,13 @@ __global__ void BeamSearchScorer_Process(BeamScorerState& state_cpu,
   // Sequences shape is (batch_size * num_beams, total_sequence_length)
   // It contains word ID of whole sequence generated so far.
   // It is different from subgraph input_ids, which only need one word when past state is not empty.
+  printf("\n >>> BeamSearchScorer_Process \n");
 
   int batch = threadIdx.x;
   int batch_start = batch * state.num_beams_;
 
   cuda::BeamHypotheses& beam_hyp = beam_hyps_[batch];
+
   if (!beam_hyp.done_) {
     // Next tokens for this sentence.
     size_t beam_idx = 0;
@@ -408,7 +449,6 @@ __global__ void BeamSearchScorer_Process(BeamScorerState& state_cpu,
           state_cpu.not_done_count_ = 0;  // Update the CPU side
 
         printf("\n --- BeamSearchScorer_Process updated cpu state for batch %d\n", threadIdx.x);
-        state_cpu.Print();
       }
     }
   } else {
@@ -419,6 +459,34 @@ __global__ void BeamSearchScorer_Process(BeamScorerState& state_cpu,
       next_beam_indices_[batch_start + beam_idx] = 0;
     }
   }
+
+  printf("\n <<< BeamSearchScorer_Process \n");
+}
+
+__global__ void DumpBeamScorerState(BeamScorerState& state) {
+  state.Print();
+}
+
+void DumpBeamScorerStates(BeamScorerState& state_cpu, BeamScorerState& state, cudaStream_t stream){
+    printf("\n state_cpu: \n");
+    state_cpu.Print();
+
+    printf("\n state_gpu: \n");
+    DumpBeamScorerState<<<1, 1, 0, stream>>>(state);
+    cudaStreamSynchronize(stream);
+}
+
+__global__ void DumpBeamSearchScorer(const BeamHypotheses& beam_hyp) {
+  dump_beam_hypotheses(&beam_hyp);
+}
+
+void DumpBeamHypotheses(gsl::span<BeamHypotheses> beam_hyps, cudaStream_t stream) {
+    printf("\n BeamHypotheses of size %zu: \n", beam_hyps.size());
+    for (size_t i = 0; i < beam_hyps.size(); i++) {
+      printf("\n [%zu]:\n", i);
+      DumpBeamSearchScorer<<<1, 1, 0, stream>>>(beam_hyps[i]);
+      cudaStreamSynchronize(stream);
+    }
 }
 
 void LaunchBeamSearchScorer_Process(BeamScorerState& state_cpu,
@@ -434,9 +502,10 @@ void LaunchBeamSearchScorer_Process(BeamScorerState& state_cpu,
                                     gsl::span<const int32_t> next_tokens,
                                     gsl::span<const int32_t> next_indices,
                                     cudaStream_t stream) {
-  for (size_t i = 0; i < beam_hyps.length(); i++) {
-    dump_beam_hypotheses(&beam_hyps[i]);
-  }
+  printf("\n >>> LaunchBeamSearchScorer_Process \n");
+
+  DumpBeamHypotheses(beam_hyps, stream);
+  DumpBeamScorerStates(state_cpu, state, stream);
 
   BeamSearchScorer_Process<<<1, state_cpu.batch_size_, 0, stream>>>(state_cpu,
                                                                     state,
@@ -450,6 +519,11 @@ void LaunchBeamSearchScorer_Process(BeamScorerState& state_cpu,
                                                                     next_scores.data(),
                                                                     next_tokens.data(),
                                                                     next_indices.data());
+
+  DumpBeamHypotheses(beam_hyps, stream);
+  DumpBeamScorerStates(state_cpu, state, stream);
+
+  printf("\n <<< LaunchBeamSearchScorer_Process \n");
 }
 
 __global__ void BeamSearchScorer_AppendNextTokenToSequences1(BeamScorerState& state,
@@ -485,6 +559,8 @@ void LaunchBeamSearchScorer_AppendNextTokenToSequences(BeamScorerState& state_cp
                                                        gsl::span<int32_t> next_beam_tokens,
                                                        gsl::span<int32_t> next_beam_indices,
                                                        cudaStream_t stream) {
+  printf("\n >>> LaunchBeamSearchScorer_AppendNextTokenToSequences \n");
+
   const int max_threads = 512;
   int batch_beam_size = state_cpu.batch_size_ * state_cpu.num_beams_;
   dim3 block_size;
@@ -518,6 +594,7 @@ void LaunchBeamSearchScorer_AppendNextTokenToSequences(BeamScorerState& state_cp
                                                                                   next_sequences.data(),
                                                                                   sequence_length,
                                                                                   next_beam_tokens.data());
+  printf("\n <<< LaunchBeamSearchScorer_AppendNextTokenToSequences \n");
 }
 
 template <typename T>
@@ -564,6 +641,7 @@ void LaunchBeamSearchScorer_Finalize(int batch_size,
                                      gsl::span<int32_t> output,
                                      gsl::span<T> sequence_scores,
                                      cudaStream_t stream) {
+  printf("\n >>> LaunchBeamSearchScorer_Finalize \n");
   BeamSearchScorer_Finalize<<<1, batch_size, 0, stream>>>(state,
                                                           sequences.data(),
                                                           sequence_length,
@@ -571,6 +649,7 @@ void LaunchBeamSearchScorer_Finalize(int batch_size,
                                                           final_beam_scores.data(),
                                                           output.data(),
                                                           sequence_scores.data());
+  printf("\n <<< LaunchBeamSearchScorer_Finalize \n");
 }
 
 template void LaunchBeamSearchScorer_Finalize<float>(
