@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 from c.assemble_c_pod_package import assemble_c_pod_package
 from package_assembly_utils import PackageVariant, gen_file_from_template, get_ort_version
@@ -130,6 +131,13 @@ def _test_apple_packages(args):
             print(f"Simulator device info:\n{simulator_device_info}")
 
             simulator_device_info = json.loads(simulator_device_info)
+
+            # Boot the simulator
+            boot_cmd = ["xcrun", "simctl", "boot", f"{simulator_device_info['device_udid']}"]
+            subprocess.run(boot_cmd, check=True)
+
+            # Sleep for 15 seconds
+            time.sleep(15)
 
             # Xcode UI tests seem to be flaky: https://github.com/orgs/community/discussions/68807
             # Add a couple of retries if we get this error:
