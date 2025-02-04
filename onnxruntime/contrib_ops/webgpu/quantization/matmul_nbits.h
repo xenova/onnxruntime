@@ -60,7 +60,7 @@ class MatMulNBits final : public WebGpuKernel {
     N_ = info.GetAttr<int64_t>("N");
     block_size_ = info.GetAttr<int64_t>("block_size");
     int64_t bits = info.GetAttr<int64_t>("bits");
-    accuracy_level_ = info.GetAttrOrDefault<int64_t>("accuracy_level", 4);
+    accuracy_level_ = 4; //info.GetAttrOrDefault<int64_t>("accuracy_level", 4);
     ORT_ENFORCE(bits == 4,
                 "Only 4b quantization is supported for MatMulNBits op, additional bits support is planned.");
   }
