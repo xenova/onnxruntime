@@ -103,7 +103,7 @@ struct BeamScorerState {
 void LaunchInitializeBeamHypotheses(gsl::span<BeamHypotheses> beam_hyps, float length_penalty, gsl::span<HypothesisScore> beams, int num_beams, cudaStream_t stream);
 
 void LaunchBeamSearchScorer_Process(BeamScorerState& state_cpu,
-                                    BeamScorerState& state,
+                                    BeamScorerState* state,
                                     gsl::span<const int32_t> sequences,
                                     int sequence_length,
                                     gsl::span<BeamHypotheses> beam_hyps_,

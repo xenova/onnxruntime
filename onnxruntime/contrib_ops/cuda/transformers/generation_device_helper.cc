@@ -726,7 +726,7 @@ void CudaBeamSearchScorer::Process(transformers::ISequences& sequences,
   state_cpu_->Print();
 
   cuda::LaunchBeamSearchScorer_Process(*state_cpu_,
-                                       *state_gpu_,
+                                       state_gpu_.get(),
                                        sequences.GetCurrentDeviceSequences(),
                                        sequences.GetSequenceLength(),
                                        beam_hyps_,
