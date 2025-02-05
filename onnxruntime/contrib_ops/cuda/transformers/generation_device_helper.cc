@@ -524,6 +524,7 @@ Status ProcessLogits(const OrtValue& logits,                                 // 
     beam_state->remaining_scores = beam_state->remaining_scores.subspan(next_token_scores.size());
   }
 
+  gsl::span<float> out_scores = beam_state->next_scores;
   if (num_beams <= 32) {
     constexpr size_t max_parts_of_vocab = 128;
     size_t candidate_count = SafeInt<size_t>(batch_beam_size) * 2 * num_beams;
@@ -588,16 +589,17 @@ Status ProcessLogits(const OrtValue& logits,                                 // 
     cuda::LaunchNextTokenKernel(next_token_indices, beam_state->next_indices.data(), beam_state->next_tokens.data(),
                                 batch_size, top_k, vocab_size, cuda_stream);
 
-    // BUG?: Copy topk_scores to next_scores
 #ifdef DEBUG_GENERATION
     dumper->Print("next_scores before scorer", topk_scores->Data<float>(), batch_size, top_k);
     dumper->Print("next_tokens before scorer", beam_state->next_tokens.data(), batch_size, top_k);
     dumper->Print("next_indices before scorer", beam_state->next_indices.data(), batch_size, top_k);
 #endif
+    // use topk_scores as next_scores
+    out_scores = gsl::span<float>(topk_scores->MutableData<float>(), batch_size * top_k);
   }
 
   // gsl::span doesn't convert from non const to const, so all we're doing here is making each const.
-  gsl::span<const float> next_scores(beam_state->next_scores.data(), beam_state->next_scores.size());
+  gsl::span<const float> next_scores(out_scores.data(), out_scores.size());
   gsl::span<const int32_t> next_tokens(beam_state->next_tokens.data(), beam_state->next_tokens.size());
   gsl::span<const int32_t> next_indices(beam_state->next_indices.data(), beam_state->next_indices.size());
 
@@ -723,8 +725,10 @@ void CudaBeamSearchScorer::Process(transformers::ISequences& sequences,
                                    gsl::span<const float>& next_scores,
                                    gsl::span<const int32_t>& next_tokens,
                                    gsl::span<const int32_t>& next_indices) {
+#ifdef DEBUG_GENERATION
   printf("\n---Process ---\n");
   state_cpu_->Print(true);
+#endif
 
   cuda::LaunchBeamSearchScorer_Process(*state_cpu_,
                                        state_gpu_.get(),
@@ -755,8 +759,10 @@ void CudaBeamSearchScorer::Process(transformers::ISequences& sequences,
 bool CudaBeamSearchScorer::IsDoneLater() const {
   CUDA_CALL_THROW(cudaEventSynchronize(event_process_complete_.Get()));
 
+#ifdef DEBUG_GENERATION
   printf("\n---IsDoneLater ---\n");
   state_cpu_->Print(true);
+#endif
 
   return state_cpu_->not_done_count_ == 0;
 }
