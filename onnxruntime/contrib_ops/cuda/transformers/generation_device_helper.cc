@@ -30,6 +30,7 @@
 #include "sampling_cuda_helper.h"
 
 #ifdef DEBUG_GENERATION
+#include <stdio.h>
 #include <iostream>
 #endif
 
@@ -726,8 +727,10 @@ void CudaBeamSearchScorer::Process(transformers::ISequences& sequences,
                                    gsl::span<const int32_t>& next_tokens,
                                    gsl::span<const int32_t>& next_indices) {
 #ifdef DEBUG_GENERATION
+  cudaDeviceSynchronize();
   printf("\n---Process ---\n");
   state_cpu_->Print(true);
+  fflush(stdout);
 #endif
 
   cuda::LaunchBeamSearchScorer_Process(*state_cpu_,
@@ -760,8 +763,10 @@ bool CudaBeamSearchScorer::IsDoneLater() const {
   CUDA_CALL_THROW(cudaEventSynchronize(event_process_complete_.Get()));
 
 #ifdef DEBUG_GENERATION
+  cudaDeviceSynchronize();
   printf("\n---IsDoneLater ---\n");
   state_cpu_->Print(true);
+  fflush(stdout);
 #endif
 
   return state_cpu_->not_done_count_ == 0;

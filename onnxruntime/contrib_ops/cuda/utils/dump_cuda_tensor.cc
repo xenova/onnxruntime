@@ -95,6 +95,7 @@ void DumpGpuTensor(const char* name, const T* tensor, int dim0, int dim1, bool i
   } else {
     onnxruntime::utils::PrintCpuTensorFull<T>(*data, dim0, dim1);
   }
+  std::cout << std::flush;
 }
 
 template <typename T>
@@ -116,6 +117,7 @@ void DumpGpuTensor(const char* name, const T* tensor, int dim0, int dim1, int di
   } else {
     onnxruntime::utils::PrintCpuTensorFull<T>(*data, dim0, dim1, dim2);
   }
+  std::cout << std::flush;
 }
 
 template <typename T>
@@ -144,6 +146,7 @@ void DumpGpuTensor(const char* name, const T* tensor, int dim0, int dim1, int di
       onnxruntime::utils::PrintCpuTensorFull<T>((*data) + i * dim1 * dim2 * dim3, dim1, dim2, dim3);
     }
   }
+  std::cout << std::flush;
 }
 
 void DumpGpuTensor(const char* name, const Tensor& tensor, int dim0, int dim1, int dim2) {
