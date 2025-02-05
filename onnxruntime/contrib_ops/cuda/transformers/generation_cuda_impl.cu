@@ -429,9 +429,18 @@ __global__ void BeamSearchScorer_Process(BeamScorerState& state_cpu,
 #endif
     if (beam_hyp.beams_used_ == state.num_beams_) {
       bool is_done = state.early_stopping_;
+      if (is_done) {
+#ifdef DEBUG_GENERATION
+        printf("\n --- state.early_stopping_ (batch %d)\n", batch);
+#endif
+      }
+
       if (!is_done) {
         float best_sum_logprobs = *std::max_element(next_scores + batch_start, next_scores + batch_start + top_k);
-        is_done = !beam_hyp.CanImprove(*std::max_element(next_scores + batch_start, next_scores + batch_start + top_k), sequence_length);
+        is_done = !beam_hyp.CanImprove(best_sum_logprobs, sequence_length);
+#ifdef DEBUG_GENERATION
+        printf("\n --- CanImprove=%d with best_sum_logprobs=%f,  sequence_length=%d\n", is_done ? 0 : 1, best_sum_logprobs, sequence_length);
+#endif
       }
 
       if (is_done) {
@@ -440,6 +449,7 @@ __global__ void BeamSearchScorer_Process(BeamScorerState& state_cpu,
           state_cpu.not_done_count_ = 0;  // Update the CPU side
 #ifdef DEBUG_GENERATION
         printf("\n --- BeamSearchScorer_Process updated cpu state for batch %d\n", batch);
+        printf("\n --- is_done (state.early_stopping_=%d state_cpu.not_done_count_=%d) for batch %d\n", state.early_stopping_ ? 1 : 0, state_cpu.not_done_count_, batch);
 #endif
       }
     }
