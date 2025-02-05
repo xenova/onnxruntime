@@ -588,6 +588,7 @@ Status ProcessLogits(const OrtValue& logits,                                 // 
     cuda::LaunchNextTokenKernel(next_token_indices, beam_state->next_indices.data(), beam_state->next_tokens.data(),
                                 batch_size, top_k, vocab_size, cuda_stream);
 
+    // BUG?: Copy topk_scores to next_scores
 #ifdef DEBUG_GENERATION
     dumper->Print("next_scores before scorer", topk_scores->Data<float>(), batch_size, top_k);
     dumper->Print("next_tokens before scorer", beam_state->next_tokens.data(), batch_size, top_k);
@@ -722,8 +723,11 @@ void CudaBeamSearchScorer::Process(transformers::ISequences& sequences,
                                    gsl::span<const float>& next_scores,
                                    gsl::span<const int32_t>& next_tokens,
                                    gsl::span<const int32_t>& next_indices) {
+  printf("\n---Process ---\n");
+  state_cpu_->Print(true);
+
   cuda::LaunchBeamSearchScorer_Process(*state_cpu_,
-                                       *state_gpu_,
+                                       state_gpu_.get(),
                                        sequences.GetCurrentDeviceSequences(),
                                        sequences.GetSequenceLength(),
                                        beam_hyps_,
@@ -735,6 +739,7 @@ void CudaBeamSearchScorer::Process(transformers::ISequences& sequences,
                                        next_tokens,
                                        next_indices,
                                        stream_);
+
   CUDA_CALL_THROW(cudaEventRecord(event_process_complete_.Get(), stream_));
 
   cuda::LaunchBeamSearchScorer_AppendNextTokenToSequences(*state_cpu_,
@@ -749,6 +754,10 @@ void CudaBeamSearchScorer::Process(transformers::ISequences& sequences,
 
 bool CudaBeamSearchScorer::IsDoneLater() const {
   CUDA_CALL_THROW(cudaEventSynchronize(event_process_complete_.Get()));
+
+  printf("\n---IsDoneLater ---\n");
+  state_cpu_->Print(true);
+
   return state_cpu_->not_done_count_ == 0;
 }
 

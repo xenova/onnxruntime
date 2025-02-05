@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <cuda_fp16.h>
 #include <curand_kernel.h>
+#include <cstdio>
 
 namespace onnxruntime {
 namespace contrib {
@@ -82,14 +83,27 @@ struct BeamScorerState {
   int eos_token_id_;
   bool early_stopping_;
   int not_done_count_;  // When zero, every batch entry is done (starts at batch_size_)
-
   int hypothesis_buffer_used_;  // Offset of available buffer, or length of used buffer.
+
+  // Function to dump the struct data to stdout
+  __host__ __device__ void Print(bool is_cpu) const {
+    printf("BeamScorerState (cpu=%d) Dump:\n", is_cpu ? 1 : 0);
+    printf("  batch_size_: %d\n", batch_size_);
+    printf("  num_beams_: %d\n", num_beams_);
+    printf("  max_length_: %d\n", max_length_);
+    printf("  num_return_sequences_: %d\n", num_return_sequences_);
+    printf("  pad_token_id_: %d\n", pad_token_id_);
+    printf("  eos_token_id_: %d\n", eos_token_id_);
+    printf("  early_stopping_: %s\n", early_stopping_ ? "true" : "false");
+    printf("  not_done_count_: %d\n", not_done_count_);
+    printf("  hypothesis_buffer_used_: %d\n", hypothesis_buffer_used_);
+  }
 };
 
 void LaunchInitializeBeamHypotheses(gsl::span<BeamHypotheses> beam_hyps, float length_penalty, gsl::span<HypothesisScore> beams, int num_beams, cudaStream_t stream);
 
 void LaunchBeamSearchScorer_Process(BeamScorerState& state_cpu,
-                                    BeamScorerState& state,
+                                    BeamScorerState* state,
                                     gsl::span<const int32_t> sequences,
                                     int sequence_length,
                                     gsl::span<BeamHypotheses> beam_hyps_,
