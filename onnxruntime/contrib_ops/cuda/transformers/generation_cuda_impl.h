@@ -86,8 +86,8 @@ struct BeamScorerState {
   int hypothesis_buffer_used_;  // Offset of available buffer, or length of used buffer.
 
   // Function to dump the struct data to stdout
-  __host__ __device__ void Print() const {
-    printf("BeamScorerState Dump:\n");
+  __host__ __device__ void Print(bool is_cpu) const {
+    printf("BeamScorerState (cpu=%d) Dump:\n", is_cpu ? 1 : 0);
     printf("  batch_size_: %d\n", batch_size_);
     printf("  num_beams_: %d\n", num_beams_);
     printf("  max_length_: %d\n", max_length_);

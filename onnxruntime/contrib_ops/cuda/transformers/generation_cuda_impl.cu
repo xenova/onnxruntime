@@ -416,6 +416,10 @@ __global__ void BeamSearchScorer_Process(BeamScorerState& state_cpu,
       int32_t next_index = next_indices[batch * top_k + j];
 
       int batch_beam_idx = batch_start + next_index;
+
+      printf("\nbatch=%d batch_beam_idx=%d j=%uz next_token=%d eos_token_id=%d next_score=%f next_index=%d\n",
+              batch, batch_beam_idx, j, next_token, state.eos_token_id_, next_score, next_index);
+
       // Add to generated hypotheses if end of sentence.
       if ((state.eos_token_id_ >= 0) && (next_token == state.eos_token_id_)) {
         bool is_beam_token_worse_than_top_num_beams = (j >= state.num_beams_);
@@ -444,6 +448,8 @@ __global__ void BeamSearchScorer_Process(BeamScorerState& state_cpu,
     }
 
     //  Check if we are done so that we can save a pad step if all(done)
+    printf("\n beam_hyp.beams_used_ == state.num_beams_ is %d\n", beam_hyp.beams_used_ == state.num_beams_ ? 1 : 0);
+
     if (beam_hyp.beams_used_ == state.num_beams_) {
       if (state.early_stopping_ || !beam_hyp.CanImprove(*std::max_element(next_scores + batch_start, next_scores + batch_start + top_k), sequence_length)) {
         beam_hyp.done_ = true;
@@ -466,16 +472,15 @@ __global__ void BeamSearchScorer_Process(BeamScorerState& state_cpu,
 }
 
 __global__ void DumpBeamScorerState(BeamScorerState* state) {
-  state->Print();
+  state->Print(false);
 }
 
 void DumpBeamScorerStates(BeamScorerState& state_cpu, BeamScorerState* state, cudaStream_t stream){
-    printf("\n state_cpu: \n");
-    state_cpu.Print();
+    state_cpu.Print(true);
 
-    printf("\n state_gpu: \n");
+    cudaDeviceSynchronize();
     DumpBeamScorerState<<<1, 1, 0, stream>>>(state);
-    cudaStreamSynchronize(stream);
+    cudaDeviceSynchronize();
 }
 
 __global__ void DumpBeamSearchScorer(const BeamHypotheses& beam_hyp) {
@@ -486,8 +491,9 @@ void DumpBeamHypotheses(gsl::span<BeamHypotheses> beam_hyps, cudaStream_t stream
     printf("\n BeamHypotheses of size %zu: \n", beam_hyps.size());
     for (size_t i = 0; i < beam_hyps.size(); i++) {
       printf("\n [%zu]:\n", i);
+      cudaDeviceSynchronize();
       DumpBeamSearchScorer<<<1, 1, 0, stream>>>(beam_hyps[i]);
-      cudaStreamSynchronize(stream);
+      cudaDeviceSynchronize();
     }
 }
 
@@ -514,6 +520,7 @@ void LaunchBeamSearchScorer_Process(BeamScorerState& state_cpu,
   cudaDeviceSynchronize();
   DumpBeamScorerStates(state_cpu, state_gpu, stream);
   cudaDeviceSynchronize();
+
 
   BeamSearchScorer_Process<<<1, state_cpu.batch_size_, 0, stream>>>(state_cpu,
                                                                     state_gpu,
