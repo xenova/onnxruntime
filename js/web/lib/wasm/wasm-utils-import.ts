@@ -28,7 +28,8 @@ const getScriptSrc = (): string | undefined => {
     // So that bundler can preprocess the URL correctly.
     if (BUILD_DEFS.ESM_IMPORT_META_URL?.startsWith('file:')) {
       // if the rewritten URL is a relative path, we need to use the origin to resolve the URL.
-      return new URL(new URL(BUILD_DEFS.BUNDLE_FILENAME, BUILD_DEFS.ESM_IMPORT_META_URL).href, origin).href;
+      const _URL = URL; // Avoid using the `new URL(...)` construct directly to avoid bundler rewrites.
+      return new _URL(new _URL(BUILD_DEFS.BUNDLE_FILENAME, BUILD_DEFS.ESM_IMPORT_META_URL).href, origin).href;
     }
 
     return BUILD_DEFS.ESM_IMPORT_META_URL;
