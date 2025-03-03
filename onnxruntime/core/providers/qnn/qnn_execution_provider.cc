@@ -369,6 +369,21 @@ QNNExecutionProvider::QNNExecutionProvider(const ProviderOptions& provider_optio
     rpcmem_library_ = std::make_shared<qnn::RpcMemLibrary>();
   }
 
+  dump_json_qnn_graph_ = ParseBoolOption("dump_json_qnn_graph", false, provider_options_map);
+
+  static const std::string QNN_GRAPH_DUMP_DIR = "json_qnn_graph_dir";
+  auto json_graphs_dir_pos = provider_options_map.find(QNN_GRAPH_DUMP_DIR);
+
+  if (json_graphs_dir_pos != provider_options_map.end()) {
+    json_qnn_graph_dir_ = json_graphs_dir_pos->second;
+    if (dump_json_qnn_graph_) {
+      LOGS_DEFAULT(INFO) << "JSON graphs directory: " << json_qnn_graph_dir_;
+    } else {
+      LOGS_DEFAULT(WARNING) << "Provided a directory for dumping QNN JSON graphs, "
+                            << "but did not enable dumping of QNN JSON graphs.";
+    }
+  }
+
   qnn_backend_manager_ = qnn::QnnBackendManager::Create(
       qnn::QnnBackendManagerConfig{backend_path,
                                    profiling_level_etw,
@@ -490,12 +505,6 @@ QNNExecutionProvider::GetSupportedNodes(const GraphViewer& graph_viewer,
                                         const logging::Logger& logger) const {
   std::unordered_set<const Node*> supported_nodes{};
 
-  std::unordered_set<std::string> initializer_input_lookup;
-  auto graph_initializers = graph_viewer.GetAllInitializedTensors();
-  for (auto graph_ini : graph_initializers) {
-    initializer_input_lookup.emplace(graph_ini.first);
-  }
-
   // Util function that initializes a table that maps a graph input or output name to its index.
   auto init_input_output_index_map = [](std::unordered_map<std::string, size_t>& index_map,
                                         const std::vector<const NodeArg*>& node_args) {
@@ -516,7 +525,6 @@ QNNExecutionProvider::GetSupportedNodes(const GraphViewer& graph_viewer,
                                                 qnn_backend_manager_->GetQnnBackendHandle(),
                                                 model_input_index_map,
                                                 model_output_index_map,
-                                                initializer_input_lookup,
                                                 qnn_backend_manager_->GetQnnBackendType(),
                                                 model_settings_);
 
@@ -534,7 +542,7 @@ QNNExecutionProvider::GetSupportedNodes(const GraphViewer& graph_viewer,
     Status status = qnn_node_group->IsSupported(qnn_model_wrapper, logger);
     const bool supported = status.IsOK();
 
-    constexpr auto log_severity = logging::Severity::kVERBOSE;
+    constexpr auto log_severity = logging::Severity::kINFO;
     constexpr auto log_data_type = logging::DataType::SYSTEM;
     if (logger.OutputIsEnabled(log_severity, log_data_type)) {
       LogNodeSupport(logger, log_severity, log_data_type, ORT_WHERE, *qnn_node_group, status);
@@ -646,7 +654,8 @@ static void PartitionCtxModel(const onnxruntime::GraphViewer& graph_viewer,
 
 std::vector<std::unique_ptr<ComputeCapability>>
 QNNExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_viewer,
-                                    const IKernelLookup& /*kernel_lookup*/) const {
+                                    const IKernelLookup& /*kernel_lookup*/,
+                                    IResourceAccountant* /* resource_accountant */) const {
   std::vector<std::unique_ptr<ComputeCapability>> result;
 
   if (graph_viewer.IsSubgraph()) {
@@ -874,8 +883,16 @@ Status QNNExecutionProvider::CompileFromOrtGraph(const std::vector<FusedNodeAndG
                                                                                                 QNN_HTP_GRAPH_CUSTOM_CONFIG_INIT);
     InitQnnGraphConfigs(graph_configs_builder);
 
+    std::string json_graph_filepath;
+
+    if (dump_json_qnn_graph_) {
+      namespace fs = std::filesystem;
+      fs::path path = fs::path(json_qnn_graph_dir_) / fs::path(fused_node.Name() + ".json");
+      json_graph_filepath = path.string();
+    }
+
     ORT_RETURN_IF_ERROR(qnn_model->ComposeGraph(graph_viewer, fused_node, model_settings_, logger,
-                                                graph_configs_builder.GetQnnConfigs()));
+                                                graph_configs_builder.GetQnnConfigs(), json_graph_filepath));
     ORT_RETURN_IF_ERROR(qnn_model->FinalizeGraphs(logger));
     ORT_RETURN_IF_ERROR(qnn_model->SetupQnnInputOutput(logger));
 
@@ -887,24 +904,32 @@ Status QNNExecutionProvider::CompileFromOrtGraph(const std::vector<FusedNodeAndG
   return Status::OK();
 }
 
+// Figure out the context cache Onnx file path to decide the folder location
+static void GetContextOnnxModelFilePath(const std::string& customer_context_cache_path,
+                                        const onnxruntime::PathString& model_path_string,
+                                        onnxruntime::PathString& context_cache_binary_path) {
+  // always try the path set by user first, it's the only way to set it if load model from memory
+  if (!customer_context_cache_path.empty()) {
+    context_cache_binary_path = ToPathString(customer_context_cache_path);
+  } else if (!model_path_string.empty()) {  // model loaded from file
+    context_cache_binary_path = model_path_string;
+  }
+}
+
 Status QNNExecutionProvider::Compile(const std::vector<FusedNodeAndGraph>& fused_nodes_and_graphs,
                                      std::vector<NodeComputeInfo>& node_compute_funcs) {
   const auto& logger = *GetLogger();
   bool is_qnn_ctx_model = qnn::IsFusedGraphHasCtxNode(fused_nodes_and_graphs);
 
-  onnxruntime::PathString context_cache_path;
+  onnxruntime::PathString context_model_path;
   bool is_ctx_file_exist = false;
   if (is_qnn_ctx_model || context_cache_enabled_) {
     const onnxruntime::GraphViewer& graph_viewer_0(fused_nodes_and_graphs[0].filtered_graph);
-    is_ctx_file_exist = qnn::ValidateContextCacheFilePath(is_qnn_ctx_model,
-                                                          context_cache_path_cfg_,
-                                                          graph_viewer_0.ModelPath().native(),
-                                                          context_cache_path);
+    // Figure out the EP context model path from model path or session option
+    GetContextOnnxModelFilePath(context_cache_path_cfg_,
+                                graph_viewer_0.ModelPath().native(),
+                                context_model_path);
   }
-
-  ORT_RETURN_IF(is_ctx_file_exist && !is_qnn_ctx_model && context_cache_enabled_,
-                "The inference session is created from normal ONNX model. And an EP context model file is provided and existed. ",
-                "Please remove the EP context model manually if you want to re-generate it.");
 
   if (is_qnn_ctx_model) {
     // Get QnnModel from EP shared contexts
@@ -948,7 +973,7 @@ Status QNNExecutionProvider::Compile(const std::vector<FusedNodeAndGraph>& fused
       const onnxruntime::GraphViewer& main_ctx_graph_viewer(fused_nodes_and_graphs[main_context_pos].filtered_graph);
       // Create QNN context from the cached binary, deserialize the QNN graph from the binary
       ORT_RETURN_IF_ERROR(qnn::LoadQnnCtxFromOnnxGraph(main_ctx_graph_viewer,
-                                                       context_cache_path,
+                                                       context_model_path,
                                                        qnn_backend_manager_.get(),
                                                        qnn_models,
                                                        logger,
@@ -1008,7 +1033,7 @@ Status QNNExecutionProvider::Compile(const std::vector<FusedNodeAndGraph>& fused
                                                   qnn_backend_manager_->GetSdkVersion(),
                                                   fused_nodes_and_graphs,
                                                   qnn_models_,
-                                                  context_cache_path,
+                                                  context_model_path,
                                                   qnn_context_embed_mode_,
                                                   max_spill_fill_buffer_size,
                                                   logger));

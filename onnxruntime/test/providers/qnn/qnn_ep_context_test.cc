@@ -44,9 +44,9 @@ static const std::string& GetNodeAttr(const Node& node, const std::string& attr_
 }
 
 // Create a model with FusedMatMul + Add (quantized)
-// input1 -> Add -> Q -> DQ \
-//                           FusedMatMul -> Q -> DQ -> output
-//        input2 -> Q -> DQ /
+// input1 -> Add -> Q -> DQ ----
+//                              |
+//        input2 -> Q -> DQ -> FusedMatMul -> Q -> DQ -> output
 static GetTestModelFn BuildGraphWithQAndNonQ(bool single_ep_node = true) {
   return [single_ep_node](ModelTestBuilder& builder) {
     // Creat non-quantized FusedMatMul node1
@@ -252,10 +252,117 @@ TEST_F(QnnHTPBackendTests, QnnContextBinaryCpuNodeWithoutExternalWeights) {
   EpCtxCpuNodeWithExternalIniFileTestBody(false);
 }
 
-// Create a model with Case + Add (quantized)
-// cast_input -> Cast -> Q -> DQ \
-//                                Add -> Q -> DQ -> output
-//             input2 -> Q -> DQ /
+// Set ep.context_file_path to folder path which is not a valid option, check the error message
+TEST_F(QnnHTPBackendTests, QnnContextBinaryGenerationFolderPathNotExpected) {
+  ProviderOptions provider_options;
+#if defined(_WIN32)
+  provider_options["backend_path"] = "QnnHtp.dll";
+#else
+  provider_options["backend_path"] = "libQnnHtp.so";
+#endif
+  provider_options["offload_graph_io_quantization"] = "0";
+
+  const std::unordered_map<std::string, int> domain_to_version = {{"", 13}, {kMSDomain, 1}};
+
+  auto& logging_manager = DefaultLoggingManager();
+  logging_manager.SetDefaultLoggerSeverity(logging::Severity::kERROR);
+
+  onnxruntime::Model model("QNN_EP_TestModel", false, ModelMetaData(), PathString(),
+                           IOnnxRuntimeOpSchemaRegistryList(), domain_to_version, {},
+                           logging_manager.DefaultLogger());
+  Graph& graph = model.MainGraph();
+  ModelTestBuilder helper(graph);
+  bool single_ep_node = true;
+  BuildGraphWithQAndNonQ(single_ep_node)(helper);
+  helper.SetGraphOutputs();
+  ASSERT_STATUS_OK(model.MainGraph().Resolve());
+
+  // Serialize the model to a string.
+  std::string model_data;
+  model.ToProto().SerializeToString(&model_data);
+
+  const auto model_data_span = AsByteSpan(model_data.data(), model_data.size());
+
+  const std::string ep_context_onnx_file = "./ep_context_folder_not_expected/";
+  std::remove(ep_context_onnx_file.c_str());
+  Ort::SessionOptions so;
+  so.AddConfigEntry(kOrtSessionOptionEpContextEnable, "1");
+  so.AddConfigEntry(kOrtSessionOptionEpContextFilePath, ep_context_onnx_file.c_str());
+  so.AppendExecutionProvider("QNN", provider_options);
+
+  try {
+    Ort::Session session(*ort_env, model_data_span.data(), model_data_span.size(), so);
+    FAIL();  // Should not get here!
+  } catch (const Ort::Exception& excpt) {
+    ASSERT_EQ(excpt.GetOrtErrorCode(), ORT_INVALID_ARGUMENT);
+    ASSERT_THAT(excpt.what(), testing::HasSubstr("context_file_path should not point to a folder."));
+  }
+}
+
+// Create session 1 to generate context binary file
+// Create session 2 to do same thing, make sure session 2 failed because file exist already
+// Make sure no new file over write from session 2
+TEST_F(QnnHTPBackendTests, QnnContextBinaryGenerationNoOverWrite) {
+  ProviderOptions provider_options;
+#if defined(_WIN32)
+  provider_options["backend_path"] = "QnnHtp.dll";
+#else
+  provider_options["backend_path"] = "libQnnHtp.so";
+#endif
+  provider_options["offload_graph_io_quantization"] = "0";
+
+  const std::unordered_map<std::string, int> domain_to_version = {{"", 13}, {kMSDomain, 1}};
+
+  auto& logging_manager = DefaultLoggingManager();
+  logging_manager.SetDefaultLoggerSeverity(logging::Severity::kERROR);
+
+  onnxruntime::Model model("QNN_EP_TestModel", false, ModelMetaData(), PathString(),
+                           IOnnxRuntimeOpSchemaRegistryList(), domain_to_version, {},
+                           logging_manager.DefaultLogger());
+  Graph& graph = model.MainGraph();
+  ModelTestBuilder helper(graph);
+  bool single_ep_node = true;
+  BuildGraphWithQAndNonQ(single_ep_node)(helper);
+  helper.SetGraphOutputs();
+  ASSERT_STATUS_OK(model.MainGraph().Resolve());
+
+  // Serialize the model to a string.
+  std::string model_data;
+  model.ToProto().SerializeToString(&model_data);
+
+  const auto model_data_span = AsByteSpan(model_data.data(), model_data.size());
+
+  const std::string ep_context_onnx_file = "./ep_context_no_over_write.onnx";
+  const std::string ep_context_binary_file = "./ep_context_no_over_write_QNN_10880527342279992768_1_0.bin";
+
+  std::remove(ep_context_onnx_file.c_str());
+  Ort::SessionOptions so;
+  so.AddConfigEntry(kOrtSessionOptionEpContextEnable, "1");
+  so.AddConfigEntry(kOrtSessionOptionEpContextFilePath, ep_context_onnx_file.c_str());
+  so.AppendExecutionProvider("QNN", provider_options);
+
+  Ort::Session session1(*ort_env, model_data_span.data(), model_data_span.size(), so);
+
+  auto modify_time_1 = std::filesystem::last_write_time(ep_context_binary_file);
+
+  try {
+    Ort::Session session2(*ort_env, model_data_span.data(), model_data_span.size(), so);
+    FAIL();  // Should not get here!
+  } catch (const Ort::Exception& excpt) {
+    ASSERT_EQ(excpt.GetOrtErrorCode(), ORT_FAIL);
+    ASSERT_THAT(excpt.what(), testing::HasSubstr("exist already."));
+    auto modify_time_2 = std::filesystem::last_write_time(ep_context_binary_file);
+    ASSERT_EQ(modify_time_1, modify_time_2);
+  }
+
+  ASSERT_EQ(std::remove(ep_context_onnx_file.c_str()), 0);
+  ASSERT_EQ(std::remove(ep_context_binary_file.c_str()), 0);
+}
+
+// Create a model with Cast + Add (quantized)
+// cast_input -> Cast -> Q -> DQ ----+
+//                                   |
+//             input2 -> Q -> DQ -> Add -> Q -> DQ -> output
 static GetTestModelFn BuildCastAddTestCase() {
   return [](ModelTestBuilder& builder) {
     // Creat Cast node int32 -> float32
@@ -284,9 +391,9 @@ static GetTestModelFn BuildCastAddTestCase() {
 }
 
 // Create a model with Add (quantized)
-// input1 -> Q -> DQ \
-//                    Add -> Q -> DQ -> output
-// input2 -> Q -> DQ /
+// input1 -> Q -> DQ ----
+//                       |
+// input2 -> Q -> DQ -> Add -> Q -> DQ -> output
 static GetTestModelFn BuildAddTestCase() {
   return [](ModelTestBuilder& builder) {
     std::vector<float> data = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f};
@@ -473,6 +580,8 @@ TEST_F(QnnHTPBackendTests, QnnContextBinaryCacheEmbedModeTest) {
   EXPECT_TRUE(std::filesystem::exists(context_binary_file.c_str()));
 
   // 2nd run directly loads and run from Qnn context cache model
+  std::unordered_map<std::string, std::string> session_option_pairs2;
+  session_option_pairs2.emplace(kOrtSessionOptionEpContextFilePath, context_binary_file);
   TestQDQModelAccuracy(BuildOpTestCase<float>(op_type, {input_def}, {}, {}),
                        BuildQDQOpTestCase<uint8_t>(op_type, {input_def}, {}, {}),
                        provider_options,
@@ -480,7 +589,8 @@ TEST_F(QnnHTPBackendTests, QnnContextBinaryCacheEmbedModeTest) {
                        ExpectedEPNodeAssignment::All,
                        QDQTolerance(),
                        logging::Severity::kERROR,
-                       context_binary_file);
+                       context_binary_file,
+                       session_option_pairs2);
   // Clean up
   ASSERT_EQ(std::remove(context_binary_file.c_str()), 0);
 }
@@ -497,7 +607,7 @@ TEST_F(QnnHTPBackendTests, QnnContextBinaryCacheNonEmbedModeTest) {
 #endif
   provider_options["offload_graph_io_quantization"] = "0";
   const std::string context_binary_file = "./testdata/qnn_context_cache_non_embed.onnx";
-  std::string qnn_ctx_bin = "./testdata/qnn_context_cache_non_embed.onnx_QNNExecutionProvider_QNN_8283143575221199085_1_0.bin";
+  std::string qnn_ctx_bin = "./testdata/qnn_context_cache_non_embed_QNN_8283143575221199085_1_0.bin";
 
   std::unordered_map<std::string, std::string> session_option_pairs;
   session_option_pairs.emplace(kOrtSessionOptionEpContextEnable, "1");
@@ -579,7 +689,7 @@ TEST_F(QnnHTPBackendTests, QnnContextBinaryCache_InvalidGraph) {
 #endif
   provider_options["offload_graph_io_quantization"] = "0";
   const std::string context_binary_file = "./qnn_context_cache_non_embed.onnx";
-  std::filesystem::path context_bin = "qnn_context_cache_non_embed.onnx_QNNExecutionProvider_QNN_8283143575221199085_1_0.bin";
+  std::filesystem::path context_bin = "qnn_context_cache_non_embed_QNN_8283143575221199085_1_0.bin";
   std::remove(context_binary_file.c_str());
   std::remove(context_bin.string().c_str());
 
@@ -721,6 +831,7 @@ TEST_F(QnnHTPBackendTests, QnnContextBinaryFileNotExistTest) {
 
   SessionOptions so;
   so.session_logid = "qnn_ctx_model_logger";
+  ASSERT_STATUS_OK(so.config_options.AddConfigEntry(kOrtSessionOptionEpContextFilePath, "./qnn_context_not_exist.onnx"));
   RunOptions run_options;
   run_options.run_tag = so.session_logid;
 
@@ -734,7 +845,7 @@ TEST_F(QnnHTPBackendTests, QnnContextBinaryFileNotExistTest) {
 #endif
   provider_options["offload_graph_io_quantization"] = "0";
 
-  ASSERT_STATUS_OK(session_object.RegisterExecutionProvider(QnnExecutionProviderWithOptions(provider_options)));
+  ASSERT_STATUS_OK(session_object.RegisterExecutionProvider(QnnExecutionProviderWithOptions(provider_options, &so)));
   ASSERT_STATUS_OK(session_object.Load(model_data.data(), static_cast<int>(model_data.size())));
   // Verify the return status with code INVALID_GRAPH
   ASSERT_TRUE(session_object.Initialize().Code() == common::StatusCode::INVALID_GRAPH);
@@ -747,6 +858,7 @@ TEST_F(QnnHTPBackendTests, QnnContextBinaryFileEmptyStringTest) {
 
   SessionOptions so;
   so.session_logid = "qnn_ctx_model_logger";
+  ASSERT_STATUS_OK(so.config_options.AddConfigEntry(kOrtSessionOptionEpContextFilePath, "./test_ctx.onnx"));
   RunOptions run_options;
   run_options.run_tag = so.session_logid;
 
@@ -760,7 +872,7 @@ TEST_F(QnnHTPBackendTests, QnnContextBinaryFileEmptyStringTest) {
 #endif
   provider_options["offload_graph_io_quantization"] = "0";
 
-  ASSERT_STATUS_OK(session_object.RegisterExecutionProvider(QnnExecutionProviderWithOptions(provider_options)));
+  ASSERT_STATUS_OK(session_object.RegisterExecutionProvider(QnnExecutionProviderWithOptions(provider_options, &so)));
   ASSERT_STATUS_OK(session_object.Load(model_data.data(), static_cast<int>(model_data.size())));
   // Verify the return status with code INVALID_GRAPH
   ASSERT_TRUE(session_object.Initialize().Code() == common::StatusCode::INVALID_GRAPH);
@@ -804,6 +916,8 @@ TEST_F(QnnHTPBackendTests, QnnContextBinary2InputsTest) {
   EXPECT_TRUE(std::filesystem::exists(context_binary_file.c_str()));
 
   // 2nd run directly loads and run from Qnn context cache model
+  std::unordered_map<std::string, std::string> session_option_pairs2;
+  session_option_pairs2.emplace(kOrtSessionOptionEpContextFilePath, context_binary_file);
   TestQDQModelAccuracy(BuildOpTestCase<float>(op_type, {input_def1, input_def2}, {}, {}),
                        BuildQDQOpTestCase<uint8_t>(op_type, {input_def1, input_def2}, {}, {}),
                        provider_options,
@@ -811,7 +925,8 @@ TEST_F(QnnHTPBackendTests, QnnContextBinary2InputsTest) {
                        ExpectedEPNodeAssignment::All,
                        QDQTolerance(),
                        logging::Severity::kERROR,
-                       context_binary_file);
+                       context_binary_file,
+                       session_option_pairs2);
   // Clean up
   ASSERT_EQ(std::remove(context_binary_file.c_str()), 0);
 }
@@ -829,14 +944,14 @@ TEST_F(QnnHTPBackendTests, QnnContextBinaryCache_SingleNodeNameNotMatchGraphName
   provider_options["backend_path"] = "libQnnHtp.so";
 #endif
   provider_options["offload_graph_io_quantization"] = "0";
-  const std::string context_binary_file = "./qnn_context_cache_non_embed.onnx";
-  std::filesystem::path context_bin = "qnn_context_cache_non_embed.onnx_QNNExecutionProvider_QNN_8283143575221199085_1_0.bin";
-  std::remove(context_binary_file.c_str());
+  const std::string context_model_file = "./qnn_context_cache_non_embed.onnx";
+  std::filesystem::path context_bin = "qnn_context_cache_non_embed_QNN_8283143575221199085_1_0.bin";
+  std::remove(context_model_file.c_str());
   std::remove(context_bin.string().c_str());
 
   std::unordered_map<std::string, std::string> session_option_pairs;
   session_option_pairs.emplace(kOrtSessionOptionEpContextEnable, "1");
-  session_option_pairs.emplace(kOrtSessionOptionEpContextFilePath, context_binary_file);
+  session_option_pairs.emplace(kOrtSessionOptionEpContextFilePath, context_model_file);
   session_option_pairs.emplace(kOrtSessionOptionEpContextEmbedMode, "0");
 
   const TestInputDef<float> input_def({1, 2, 3}, false, -10.0f, 10.0f);
@@ -855,7 +970,7 @@ TEST_F(QnnHTPBackendTests, QnnContextBinaryCache_SingleNodeNameNotMatchGraphName
                        session_option_pairs);
 
   // Check the Onnx skeleton file is generated
-  EXPECT_TRUE(std::filesystem::exists(context_binary_file.c_str()));
+  EXPECT_TRUE(std::filesystem::exists(context_model_file.c_str()));
   // Check the Qnn context cache binary file is generated
   EXPECT_TRUE(std::filesystem::exists(context_bin));
 
@@ -883,18 +998,19 @@ TEST_F(QnnHTPBackendTests, QnnContextBinaryCache_SingleNodeNameNotMatchGraphName
 
   SessionOptions so;
   so.session_logid = "qnn_ctx_model_logger";
+  ASSERT_STATUS_OK(so.config_options.AddConfigEntry(kOrtSessionOptionEpContextFilePath, context_model_file.c_str()));
   RunOptions run_options;
   run_options.run_tag = so.session_logid;
 
   InferenceSessionWrapper session_object{so, GetEnvironment()};
 
-  ASSERT_STATUS_OK(session_object.RegisterExecutionProvider(QnnExecutionProviderWithOptions(provider_options)));
+  ASSERT_STATUS_OK(session_object.RegisterExecutionProvider(QnnExecutionProviderWithOptions(provider_options, &so)));
   ASSERT_STATUS_OK(session_object.Load(model_data.data(), static_cast<int>(model_data.size())));
   // Verify the return status with code INVALID_GRAPH
   ASSERT_TRUE(session_object.Initialize().Code() == common::StatusCode::OK);
 
   // Clean up
-  ASSERT_EQ(std::remove(context_binary_file.c_str()), 0);
+  ASSERT_EQ(std::remove(context_model_file.c_str()), 0);
   ASSERT_EQ(std::remove(context_bin.string().c_str()), 0);
 }
 
@@ -1060,7 +1176,13 @@ TEST_F(QnnHTPBackendTests, QnnContextShareAcrossSessions1) {
   for (auto model_path : onnx_model_paths) {
     CreateQdqModel(model_path, DefaultLoggingManager().DefaultLogger());
     EXPECT_TRUE(std::filesystem::exists(model_path.c_str()));
-    ctx_model_paths.push_back(model_path + "_ctx.onnx");
+    auto pos = model_path.find_last_of(".");
+    if (pos != std::string::npos) {
+      model_path = model_path.substr(0, pos) + "_ctx.onnx";
+    } else {
+      model_path = model_path + "_ctx.onnx";
+    }
+    ctx_model_paths.push_back(model_path);
   }
 
   DumpModelWithSharedCtx(provider_options, onnx_model_paths[0], onnx_model_paths[1]);
@@ -1158,7 +1280,13 @@ TEST_F(QnnHTPBackendTests, QnnContextShareAcrossSessions2) {
   for (auto model_path : onnx_model_paths) {
     CreateQdqModel(model_path, DefaultLoggingManager().DefaultLogger());
     EXPECT_TRUE(std::filesystem::exists(model_path.c_str()));
-    ctx_model_paths.push_back(model_path + "_ctx.onnx");
+    auto pos = model_path.find_last_of(".");
+    if (pos != std::string::npos) {
+      model_path = model_path.substr(0, pos) + "_ctx.onnx";
+    } else {
+      model_path = model_path + "_ctx.onnx";
+    }
+    ctx_model_paths.push_back(model_path);
   }
 
   DumpModelWithSharedCtx(provider_options, onnx_model_paths[0], onnx_model_paths[1]);
